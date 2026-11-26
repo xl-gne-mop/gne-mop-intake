@@ -1,0 +1,33 @@
+// Imports (any user): PDF / Word MOP form and the Excel intake.
+// Ported from reference/rebuild-4/index.html (r4:644-662); function bodies kept as close to verbatim as possible.
+import { R, S, STEPS, STATUSES, SIDE, UTIL, GROUPS, SYSTEM_CODES, LOTO_CATS, CAT_MAP, CONTACT_ROLES, APPROVER_ROLES, ICON_MIC, $, esc, clone, uidGen, cfg, proj, safeUrl, pad3, mopLabel, toast, now, fS, fL, isoDay, pdDay, fromIso, fileUrl, D, later, render, saveDraft } from '../core/state.js';
+import { ensureX } from '../core/record.js';
+import { allEntries, autoPick, chooseEntry, libById } from '../lib/library.js';
+import { parseMopDocx } from './docx.js';
+import { pdfjs } from '../attach/markup.js';
+import { msgList } from '../ui/html.js';
+import { uploadBlob } from '../core/save.js';
+
+async function readImport(file){const name=file.name,ext=(name.split('.').pop()||'').toLowerCase(),u8=new Uint8Array(await file.arrayBuffer());
+ if(ext==='xlsx'||ext==='xlsm'){const o=window.MOPIMP.parseIntakeXlsx(window.MOPIMP.readXlsx(u8));return{...o,kind:'Excel intake',file:name,name:o.rec.title||name}}
+ if(ext==='docx'){const o=parseMopDocx(u8);return{rec:o.rec,kind:'Word MOP',file:name,name:`${o.mopNo?'MOP #'+o.mopNo+' – ':''}${o.rec.title||name}`,info:[`Read MOP${o.mopNo?' #'+o.mopNo:''}: ${o.rec.steps.filter(x=>x.desc).length} during-MOP steps, ${o.rec.impacts.filter(x=>x.impact).length} impacts.`],warn:['Not in the MOP form, so answer these in the app: discipline, in service, support questions, LOTO points and attachments.']}}
+ if(ext==='pdf'){const L=await pdfjs(),doc=await L.getDocument({data:u8.slice(0)}).promise,lines=await window.MOPIMP.pdfLines(doc);
+  if(lines.length<10)throw new Error('This PDF has no readable text (it may be a scan). Save the MOP from Word as PDF, or use the Excel intake.');
+  const o=window.MOPIMP.parseMopLines(lines);return{...o,kind:'PDF MOP',file:name,name:`${o.mopNo?'MOP #'+o.mopNo+' – ':''}${o.rec.title||name}`,pdf:file}}
+ throw new Error('Use a PDF or Word MOP form, or the Excel intake (.xlsx).')}
+function importPanel(){const im=S.impNew;return `<div class="zone"><b class="u-789157">Import a filled MOP form or the Excel intake</b> <span class="small">(optional)</span>
+ <p class="small u-54eb29">PDF or Word MOP in the GNE / XL form, or the Excel intake template. The app reads it into this draft; you review every screen before Submit.</p>
+ <div class="bar"><label class="btn sm pri">Choose file<input type="file" accept=".pdf,.docx,.xlsx" data-impnew hidden></label><button class="btn sm" data-a="dlxl">Download Excel intake template</button></div>
+ ${S.busyImp?'<p class="small">Reading…</p>':''}${im?`<div class="u-d2c171"><b class="u-789157">${esc(im.kind)}: ${esc(im.file)}</b>${msgList([...im.info.map(m=>({l:'info',m})),...im.warn.map(m=>({l:'warn',m}))],false)}<div class="bar"><button class="btn pri sm" data-a="useimp">Use this</button><button class="btn sm" data-a="dropimp">Cancel</button></div></div>`:''}</div>`}
+async function applyImport(im){const q=S.draft,keep=clone(q.record.req),out=ensureX(R.parseRecord(clone(im.rec)));
+ ['name','company','phone','email'].forEach(k=>{if(!out.req[k])out.req[k]=keep[k]||''});if(!out.bldg&&q.record.bldg)out.bldg=q.record.bldg;
+ out.x.imported={file:im.file,kind:im.kind,at:new Date().toISOString()};q.record=out;
+ if(im.project){const p=cfg().projects.find(x=>x.id===im.project||x.label.startsWith(im.project));if(p){q.project=p.id;if(!out.bldg)out.bldg=p.bldg}}
+ /* The reference mapped one renamed work type by id; no library ids ship in the public site, so a work type can list
+   its old names in the library file (formerNames). Otherwise autoPick matches it, as the reference did. */
+ if(im.workType){const e=allEntries().find(x=>x.name===im.workType)||allEntries().find(x=>(x.formerNames||[]).includes(im.workType));if(e)chooseEntry(e.id,true);else autoPick()}else autoPick();
+ if(im.pdf){try{const res=await uploadBlob(im.pdf,{type:'application/pdf',requestId:q.id,name:im.file});q.files.push({id:res.id,name:im.file,kind:'pdf',cat:'Other'})}catch(e){}}
+ q.history.push({at:new Date().toISOString(),by:S.uid||'',what:`Imported from ${im.kind}: ${im.file}`});
+ S.impNew=null;S.dirty=true;await saveDraft();S.step=9;render();toast('Imported. The Review screen lists what is still needed; later screens fill from the library where blank.')}
+
+export { readImport, importPanel, applyImport };

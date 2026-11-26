@@ -1,0 +1,14 @@
+// Boot: iOS install gate first, then local storage, service worker and the app. Nothing here needs a network.
+import { needsInstallGate, renderInstallGate } from './pwa/installGate.js';
+import { openStore } from './store/db.js';
+import { registerServiceWorker } from './pwa/register.js';
+import { startApp } from './ui/app.js';
+
+async function boot() {
+  if (needsInstallGate()) { document.querySelector('header.top')?.remove(); renderInstallGate(document.getElementById('app')); return; }
+  await openStore();
+  registerServiceWorker().catch(() => {});
+  // navigator.storage.persist() is asked right after sign-in (src/sync/status.js afterSignIn).
+  await startApp();
+}
+boot().catch(err => { document.getElementById('app').innerHTML = '<p class="empty">The app could not start. Close it and open it again.</p>'; console.error(err); });

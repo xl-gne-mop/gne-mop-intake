@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com; connect-src 'self' https://www.googleapis.com https://sheets.googleapis.com https://oauth2.googleapis.com https://accounts.google.com https://gne-mop-intake-relay.xl-gne-mop.workers.dev; img-src 'self' blob: data:; frame-src https://accounts.google.com">
+<meta name="theme-color" content="#1F2A44">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MOP Intake">
+<title>GNE MOP Intake</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="src/ui/app.css">
+<script src="config.js"></script>
+<script src="src/vendor-ref/sri.js"></script>
+<script src="src/vendor-ref/imp.js"></script>
+<script type="module" src="src/main.js"></script>
+</head>
+<body>
+<div id="banners" aria-live="polite"></div>
+<header class="top">
+  <div class="row"><img class="logo" id="logo" alt="XL Construction" hidden><div class="ttl"><b>MOP Intake</b><span>GNE Alliance · shutdowns, LOTO and MOPs</span></div><div class="who" id="who"></div>
+    <span class="hchips"><span class="chip net" id="netchip" hidden>Offline</span><span class="chip" id="waitchip" hidden></span></span></div>
+  <div class="rule"></div>
+  <nav id="nav"><a href="#board" data-v="board">Board</a><a href="#new" data-v="new">New request</a><a href="#logs" data-v="logs">Logs &amp; exports</a><a href="#settings" data-v="settings">Settings</a><a href="#help" data-v="help">Help</a></nav>
+</header>
+<div id="syncbar" class="syncbar" aria-live="polite"></div>
+<main id="app"><p class="small">Loading…</p></main>
+<div id="mk" hidden role="dialog" aria-label="Mark up attachment"><div class="tb" id="mktb"></div><div class="hint" id="mkhint"></div><div class="cv" id="mkcv"><canvas id="mkc"></canvas></div></div>
+<noscript>This app needs JavaScript.</noscript>
+</body>
+</html>
