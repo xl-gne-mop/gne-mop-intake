@@ -24,6 +24,7 @@ import { flagsOf } from '../rules/dontKnow.js';
 import { tierOf } from '../rules/tier.js';
 import { closeGaps } from '../rules/closeOut.js';
 import { HOLD_E_T, HOLD_P_T, TEST_T, workIdx, insStep } from '../rules/fixes.js';
+import { applyAddon, reviewGate, personFor } from '../rules/review.js';
 import { findTags } from '../dictation/parse.js';
 import { sendSug, dismissSuggestion } from '../library/suggest.js';
 import { ledFrom, libPublish, libSaveDraft, markReviewed } from '../library/editor.js';
@@ -41,7 +42,7 @@ function openEdit(q,step=0){S.draft=normReq(clone(q));S.step=step;S.view='edit';
 function go(h){if(location.hash===h)route();else location.hash=h}
 function route(){const h=location.hash.slice(1);
  if(S.view==='edit'&&S.dirty)saveDraft();
- if(h==='new'){if(!(S.view==='edit'&&S.draft&&!S.draft.mopNo&&!S.reqs[S.draft.id]?.sub)){const q=normReq({});const me={...(S.me||{})};const proj0=me.project;delete me.project;Object.assign(q.record.req,me);if(!q.record.req.name)q.record.req.name=S.meName;if(!q.record.req.email&&S.uid)q.record.req.email=S.uid;me.project=proj0;const cr=S.crew||[];if(Array.isArray(cr)&&cr.length)q.record.workers=cr.slice(0,R.LIMITS.workers).map(w=>({name:w.name||'',title:w.title||'',company:w.company||''}));if(me.project)q.project=me.project;openEdit(q)}}
+ if(h==='new'){if(!(S.view==='edit'&&S.draft&&!S.draft.mopNo&&!S.reqs[S.draft.id]?.sub)){const q=normReq({});const me={...(S.me||{})};const proj0=me.project;delete me.project;Object.assign(q.record.req,me);if(!q.record.req.name)q.record.req.name=S.meName;if(!q.record.req.email&&S.uid)q.record.req.email=S.uid;{const pp=personFor(q.record.req.email);if(pp){const rq=q.record.req;if(!rq.name)rq.name=pp.name;if(!rq.company)rq.company=pp.company;if(!rq.phone)rq.phone=pp.phone}}me.project=proj0;const cr=S.crew||[];if(Array.isArray(cr)&&cr.length)q.record.workers=cr.slice(0,R.LIMITS.workers).map(w=>({name:w.name||'',title:w.title||'',company:w.company||''}));if(me.project)q.project=me.project;openEdit(q)}}
  else if(h.startsWith('e-')&&S.reqs[h.slice(2)]){if(!(S.view==='edit'&&S.draft&&S.draft.id===h.slice(2)))openEdit(S.reqs[h.slice(2)])}
  else if(h.startsWith('r-')){S.view='detail';S.id=h.slice(2)}
  else if(h==='logs'||h==='settings'||h==='help')S.view=h;else S.view='board';
@@ -109,6 +110,8 @@ app.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)retu
  if(a==='sugOpen'){S.sug={text:''};render();return}
  if(a==='sugCancel'){S.sug=null;render();return}
  if(a==='sugSend'){if(!S.sug||S.sug.text.trim().length<5){toast('Say what should change first.');return}sendSug(S.sug.text,null).then(ok=>{if(ok){S.sug=null;render()}});return}
+ if(a==='addon'){if(applyAddon(D(),b.dataset.v)){S.dirty=true;toast('Steps added. Edit them to fit the job.')}else toast('The library has no steps for this yet. Type them.');return rr()}
+ if(a==='subdir'){const r=D(),t=(cfg().trade||[]).find(x=>x.project===S.draft.project&&x.name===b.dataset.v);if(t&&r.subs.length<R.LIMITS.subs){r.subs.push({name:t.name,title:t.title,company:t.company,phone:t.phone});S.dirty=true}return rr()}
  if(a==='arr'){trackEdit(b.dataset.p,'x','y');const arr=g(D(),b.dataset.p),k=arr.indexOf(b.dataset.v);k<0?arr.push(b.dataset.v):arr.splice(k,1);return rr()}
  if(a==='add'){const arr=g(D(),b.dataset.p);arr.push(NEU[b.dataset.key]());if(b.dataset.key==='points')S.openPt=arr.length-1;return rr()}
  if(a==='del'){g(D(),b.dataset.p).splice(i,1);if(b.dataset.p==='loto.points'){S.openPt=-1;const F=D().x.flags,n={};Object.keys(F).forEach(k=>{const m=/^loto\.points\.(\d+)\.(.*)$/.exec(k);if(!m||+m[1]<i)n[k]=F[k];else if(+m[1]>i)n[`loto.points.${m[1]-1}.${m[2]}`]=F[k]});D().x.flags=n}return rr()}
@@ -153,8 +156,8 @@ app.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)retu
  if(a==='adv'&&q){const n=(q.stage||0)+1,r=(q.sub||q).record;
   // Read what is on screen in the stage form first: a field typed just before the tap may not have fired 'change' yet.
   const cur=clone(q),st0=stageMeta(cur);document.querySelectorAll('#app fieldset.stageform [data-st]').forEach(el=>{const k=el.dataset.st,v=el.type==='checkbox'?el.checked:el.value;if(k.startsWith('walk.'))st0.walk[k.slice(5)]=v;else if(k.startsWith('close.'))st0.close[k.slice(6)]=v;else st0[k]=v});
-  document.querySelectorAll('#app fieldset.stageform [data-jr]').forEach(el=>{cur.meta.jllRef[el.dataset.jr]=el.value.trim()});document.querySelectorAll('#app fieldset.stageform [data-meta="campus"]').forEach(el=>{cur.meta.campus=el.checked});
-  const gate=gateFor(cur,n,{jllNeeded:R.jllNeeded,approvalsDone:sigStatus(q),hasGoNoGo:R.lines(r.gonogo).length>0&&R.lines(r.backout).length>0,flags:flagsOf(r),tier:tierOf(r).t,closeGaps:closeGaps(q)});
+  document.querySelectorAll('#app fieldset.stageform [data-jr]').forEach(el=>{cur.meta.jllRef[el.dataset.jr]=el.value.trim()});document.querySelectorAll('#app fieldset.stageform [data-rf]').forEach(el=>{cur.meta.refs=Object.assign({},cur.meta.refs);cur.meta.refs[el.dataset.rf]=el.value.trim()});document.querySelectorAll('#app fieldset.stageform [data-meta="campus"]').forEach(el=>{cur.meta.campus=el.checked});
+  const gate=gateFor(cur,n,{jllNeeded:R.jllNeeded,approvalsDone:sigStatus(q),hasGoNoGo:R.lines(r.gonogo).length>0&&R.lines(r.backout).length>0,flags:flagsOf(r),tier:tierOf(r).t,closeGaps:closeGaps(q),extraGate:reviewGate});
 
   if(gate.length){toast(gate[0]);return}const c2=cur;if(reissuesAt(n,R.jllNeeded(r)))bumpDocRev(c2);const what=applyStage(c2,n);saveReq(c2,what,{kind:'stage.advance'}).then(render);return}
  if(a==='record'&&q){const slot=b.dataset.s,name=($(`[data-recname="${slot}"]`)||{}).value||'',how=($(`[data-rechow="${slot}"]`)||{}).value||'';if(!name.trim()){toast('Type the approver\'s name first.');return}recordApproval(q,slot,{name:name.trim(),how:how.trim()||'by email'}).then(render);return}
@@ -182,6 +185,8 @@ app.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)retu
  if(a==='signoutCancel'){S.signoutAsk=0;render();return}
  if(a==='signoutBackup'){exportBackup().then(b=>{saveFile(b.name,b.blob);toast('Backup saved. You can sign out now.')});return}
  if(a==='stab'){S.setTab=i;S.projEdit=null;S.ledit=null;render();return}
+ if(a==='pedit'){S.projEdit=cfg().projects[i]||null;render();return}
+ if(a==='pcancel'){S.projEdit=null;render();return}
  });
 
 }

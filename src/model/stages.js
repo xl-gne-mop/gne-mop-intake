@@ -18,7 +18,7 @@ export function stageMeta(q) {
 
 /**
  * What still blocks moving q to stage n (empty = can move).
- * ctx: { jllNeeded(rec), approvalsDone:{done,total}, hasGoNoGo, flags (Don't know), tier, closeGaps }.
+ * ctx: { jllNeeded(rec), approvalsDone:{done,total}, hasGoNoGo, flags (Don't know), tier, closeGaps, extraGate(q, n, rec) }.
  * The artifact doAdvance checks (index.html:286-299), the Rebuild 4 approval rule and the Rebuild 5 gates
  * (r5:1025-1026): no open Don't-know answers and a Tier 3 peer review before stage 6; close-out before stage 9.
  */
@@ -33,6 +33,7 @@ export function gateFor(q, n, ctx) {
   if (n === 6 && ctx.tier === 3 && !(q.meta.peer && q.meta.peer.name)) out.push('Tier 3: record the peer review first.');
   if (n === 7 && ctx.approvalsDone.done < ctx.approvalsDone.total) out.push(`All ${ctx.approvalsDone.total} approvers must sign first (${ctx.approvalsDone.done} done).`);
   if (n === 8 && !q.meta.campus) out.push('Tick Campus notification sent.');
+  if (ctx.extraGate) out.push(...ctx.extraGate(q, n, r)); // MOP review 11/26/26 (src/rules/review.js reviewGate): AL-08 references, AL-22 decon
   if (n === 9) { if (!st.workDone) out.push('Tick Work done first.'); const cg = ctx.closeGaps || []; if (st.workDone && cg.length) out.push(`Close-out: ${cg.length} item${cg.length > 1 ? 's' : ''} still to tick.`); }
   return out;
 }

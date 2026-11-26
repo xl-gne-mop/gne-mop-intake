@@ -6,10 +6,11 @@ import { TIER_NAME, TIER_ADDS, tierOf } from '../rules/tier.js';
 import { fl, flagsOf, gapPath } from '../rules/dontKnow.js';
 import { ruleGaps, hasStep } from '../rules/failureModes.js';
 import { permitsFor, reviewDue } from '../rules/permits.js';
+import { ensureRv, reviewGaps, reviewNotes, offSiteHot } from '../rules/review.js';
 
 function ensureX(r){r.x=Object.assign({util:{level:'',items:[],other:'',notes:''},qa:'',gmpNotes:'',isoBy:'',rts:'',isoBy2:'',backfeed:'',backfeedSrc:'',cold:'',eyewash:'',dp:'',alarms:'',flags:{},auto:{},autoEd:{},scopeOk:false},r.x||{});r.x.util=Object.assign({level:'',items:[],other:'',notes:''},r.x.util||{});
  ['flags','auto','autoEd'].forEach(k=>{if(!r.x[k]||typeof r.x[k]!=='object'||Array.isArray(r.x[k]))r.x[k]={}});if(Array.isArray(r.x.alarms))r.x.alarms=r.x.alarms.join('\n');
- if(r.loto&&Array.isArray(r.loto.points))r.loto.points.forEach(p=>{if(p.confirmed===undefined)p.confirmed=''});return r}
+ if(r.loto&&Array.isArray(r.loto.points))r.loto.points.forEach(p=>{if(p.confirmed===undefined)p.confirmed=''});return ensureRv(r)}
 function newRecord(){return ensureX(R.blankRecord())}
 function normReq(d){const q=Object.assign({id:uidGen(),project:'',mopNo:0,rev:0,status:'Draft',files:[],meta:{},sub:null,history:[],createdBy:'',createdAt:'',updatedAt:''},d||{});
  q.record=ensureX(R.parseRecord(q.record||{}));q.meta=Object.assign({preDone:[],jllRef:{assistWO:'',lotoWO:'',lotoNo:''},campus:false,onedrive:{url:'',at:'',by:''},peer:{name:'',at:''},close:{},review:{},pmFix:false},q.meta||{});q.meta.pilot=Object.assign({activeSec:0,dk:0,edits:0,subAt:'',fb:{}},q.meta.pilot||{});['close','review'].forEach(k=>{if(!q.meta[k]||typeof q.meta[k]!=='object')q.meta[k]={}});
@@ -37,7 +38,9 @@ function baseNotes(q){const r=q.record,o=[],p=proj(q.project);
  return o}
 
 /* Rebuild 5 (r5:354, 357): base checks minus answers marked Don't know, plus the failure-mode rules and tier notes. */
-function gapsFor(q){const r=ensureX(q.record);const g=baseGaps(q).filter(x=>{const p=gapPath(x.m);return !(p&&fl(r,p))});return g.concat(ruleGaps(q))}
+function gapsFor(q){const r=ensureX(q.record);const g=baseGaps(q).filter(x=>{const p=gapPath(x.m);return !(p&&fl(r,p))});
+ /* MOP review 11/26/26: hot work done in an off-site shop needs no on-site permit steps; plus the review rules (src/rules/review.js) */
+ const rg=ruleGaps(q).filter(x=>!(x.rule==='hotSteps'&&offSiteHot(r)));return g.concat(rg,reviewGaps({record:r,tier:tierOf(r).t}))}
 function notesFor(q){const r=ensureX(q.record),o=baseNotes(q),t=tierOf(r),c=cfg(),lo=r.loto.needed==='Yes',e=libById(r.x.lib&&r.x.lib.id);
  o.unshift({l:'info',m:`${TIER_NAME[t.t]}${t.why.length?' ('+t.why.join(', ')+')':''}. ${TIER_ADDS[t.t]}`,s:1});
  if(lo&&t.t===2&&!hasStep(r,/HOLD POINT/i))o.push({l:'warn',m:'Add an isolation hold point after the lockout (recommended; required on Tier 3).',s:7});
@@ -47,6 +50,6 @@ function notesFor(q){const r=ensureX(q.record),o=baseNotes(q),t=tierOf(r),c=cfg(
  const pm=permitsFor(r);if(pm.length)o.push({l:'info',m:'Permits and notices this work needs: '+pm.join('; '),s:6});
  const fg=flagsOf(r);if(fg.length)o.push({l:'warn',m:`${fg.length} answer${fg.length>1?'s':''} marked Don’t know: ${fg.map(x=>x.m).join('; ')}. You can submit; the XL PM checks them before it goes out for approval.`,s:fg[0].s});
  if(e&&reviewDue(e))o.push({l:'warn',m:`Library work type "${e.name}" was last reviewed ${e.reviewed}. Tell JK.`,s:7});
- return o}
+ return o.concat(reviewNotes(q))}
 
 export { ensureX, newRecord, normReq, ctxFor, baseGaps, baseNotes, gapsFor, notesFor };

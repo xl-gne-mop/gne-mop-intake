@@ -1,5 +1,6 @@
 // Work-type library, matching, similar past MOPs, substitutions and fill.
 // Ported from reference/rebuild-4/index.html (r4:244-293); function bodies kept as close to verbatim as possible.
+import { reviewFill, prefill, routeScore, shadowWith } from '../rules/review.js';
 import { R, S, STEPS, STATUSES, SIDE, UTIL, GROUPS, SYSTEM_CODES, LOTO_CATS, CAT_MAP, CONTACT_ROLES, APPROVER_ROLES, ICON_MIC, $, esc, clone, uidGen, cfg, proj, safeUrl, pad3, mopLabel, toast, now, fS, fL, isoDay, pdDay, fromIso, fileUrl, D, later } from '../core/state.js';
 
 const norm=t=>String(t||'').toLowerCase().replace(/[^a-z0-9&\-\/.' ]+/g,' ').replace(/\s+/g,' ');
@@ -20,10 +21,12 @@ function allEntries(){const ov={};S.lib.forEach(e=>{if(e.kind==='std'&&live(e))o
  const std=S.library.map(e=>ov[e.id]?{...ov[e.id],kind:'std',gne:true}:{...e,kind:'std'});
  return[...std,...S.lib.filter(e=>live(e)&&(e.kind==='mop'||(e.kind==='std'&&!S.library.some(m=>m.id===e.id))))]}
 function libById(id){if(!id)return null;if(id.startsWith('req:')){const q=S.reqs[id.slice(4)];return q&&q.sub?entryFromRecord(q.sub.record,id,`${q.sub.record.bldg} ${mopLabel(q)} – ${q.sub.record.title}`,'past MOP'):null}return allEntries().find(e=>e.id===id)||null}
-function libMatches(r){const text=' '+norm(recText(r))+' ';if(text.trim().length<6)return[];
+function libMatches(r){const text=' '+norm(recText(r))+' ';if(text.trim().length<6)return[];const shadowed=shadowWith();
  return allEntries().map(e=>{let sc=0;const hits=[];(e.keywords||[]).forEach(k=>{const kk=norm(k).trim();if(!kk)return;const hit=kk.length<4?new RegExp('(^|[^a-z0-9])'+kk.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).test(text):text.includes(kk);if(hit){sc+=1+(kk.split(' ').length-1)*.6;hits.push(k)}});
   if(r.discipline&&e.discipline===r.discipline)sc+=1.5;if(e.kind==='mop')sc+=sim(recText(r),e.text)*6;
-  if(r.loto.needed==='Yes'&&e.lotoType&&r.loto.points.some(p=>p.type===e.lotoType))sc+=.5;return{e,sc,hits}}).filter(x=>x.sc>=1.5).sort((a,b)=>b.sc-a.sc)}
+  if(r.loto.needed==='Yes'&&e.lotoType&&r.loto.points.some(p=>p.type===e.lotoType))sc+=.5;
+  /* MOP review 11/26/26: longest keyword ranks first (AL-02); library routing drops a type its "not" words rule out (AL-03, AL-04) */
+  sc=routeScore(e,text,sc,hits);return{e,sc,hits}}).map(shadowed).filter(x=>x.sc>=1.5).sort((a,b)=>b.sc-a.sc)}
 function similarPast(q){const r=q.record,t=recText(r);
  return Object.values(S.reqs).filter(x=>x.id!==q.id&&x.sub&&x.status!=='Cancelled').map(x=>({id:'req:'+x.id,label:`${x.sub.record.bldg} ${mopLabel(x)} – ${x.sub.record.title}`,sc:sim(t,recText(x.sub.record))}))
   .concat(S.lib.filter(e=>e.kind==='mop').map(e=>({id:e.id,label:e.name+(e.from?` (${e.from})`:''),sc:sim(t,e.text)}))).filter(x=>x.sc>.15).sort((a,b)=>b.sc-a.sc).slice(0,3)}
@@ -37,13 +40,14 @@ function fillFrom(e,step,force){const r=D(),f=[];if(!e)return f;
   if(!any||force){Object.entries(e.sys||{}).forEach(([k,v])=>{if(r.sys[k]){r.sys[k].level=v.level||'';r.sys[k].items=(v.items||[]).slice();if(v.other)r.sys[k].other=v.other;if(v.notes)r.sys[k].notes=tok(v.notes,r)}});if(e.util&&cfg().additions)Object.assign(r.x.util,clone(e.util),{items:(e.util.items||[]).slice()});f.push('affected systems')}}
  if(step===5&&e.impacts&&e.impacts.length&&(force||!r.impacts.some(i=>i.impact.trim()))){r.impacts=e.impacts.map(i=>({kind:i.kind,impact:tok(i.impact,r),mitigation:tok(i.mitigation,r)}));f.push(`${r.impacts.length} impacts`)}
  if(step===5&&!r.users.trim()){const loads=r.loto.needed==='Yes'?r.loto.points.flatMap(p=>R.lines(p.affected)):[];const u=[r.areas.trim()?r.areas.trim().split('\n')[0]+' (work area)':'',...loads.map(l=>l+' (loses service)')].filter(Boolean);if(u.length){r.users=[...new Set(u)].join('\n');f.push('who is affected')}}
- if(step===6){let n=0;Object.entries(e.sup||{}).forEach(([k,v])=>{if(!r.sup[k]||force){r.sup[k]=v;n++}});if(n)f.push('support answers');['tools','crew','safety'].forEach(k=>{if(e[k]&&(force||!r[k].trim())){r[k]=e[k];f.push(k)}})}
- if(step===7){if(force||!r.pre.some(x=>x.desc.trim())){if(e.pre&&e.pre.length){r.pre=e.pre.slice(0,2).map(p=>({desc:tok(p.desc,r),dur:p.dur||''}));f.push('pre-MOP steps')}}
+ if(step===6){let n=0;Object.entries(e.sup||{}).filter(([k])=>k in r.sup).forEach(([k,v])=>{if(!r.sup[k]||force){r.sup[k]=v;n++}});if(n)f.push('support answers');['tools','crew','safety'].forEach(k=>{if(e[k]&&(force||!r[k].trim())){r[k]=e[k];f.push(k)}})}
+ if(step===7){if(force||!r.pre.some(x=>x.desc.trim())){if(e.pre&&e.pre.length){r.pre=prefill(e,r);f.push('pre-MOP steps')}}
   if(force||!r.steps.some(x=>x.desc.trim())){r.steps=e.steps.slice(0,44).map(([d,u])=>({desc:tok(d,r),dur:u||''}));f.push(`${r.steps.length} steps`)}
   [['gonogo','Go/No-Go'],['backout','back-out']].forEach(([k,l])=>{if(e[k]&&(force||!r[k].trim())){r[k]=tok(e[k],r);f.push(l)}});
   if(e.rts&&(force||!r.x.rts.trim())){r.x.rts=tok(e.rts,r);f.push('return to service')}}
  if(step===3&&e.loto&&!r.loto.needed){r.loto.needed=e.loto;f.push('LOTO answer')}
  if(step===6&&e.alarms&&e.alarms.length&&(force||!r.x.alarms.trim())){r.x.alarms=e.alarms.join('\n');f.push('alarm list')}
+ f.push(...reviewFill(e,step,r,force));
  if(f.length){({1:['discipline','system'],3:['loto'],4:['sys','x.util'],5:['impacts','users'],6:['sup','tools','crew','safety','x.alarms'],7:['pre','steps','gonogo','backout','x.rts']}[step]||[]).forEach(k=>r.x.auto[k]=true);R.normalize(r);S.dirty=true}return f}
 function chooseEntry(id,silent){const e=libById(id);if(!e)return;const r=D();r.x.lib={id,name:e.name,kind:e.kind,ver:e.ver||'',eff:e.eff||''};const f=fillFrom(e,1);
  if(!silent)toast(`Using ${e.name}. Later screens fill in as you reach them${f.length?'; filled '+f.join(', '):''}.`);later()}

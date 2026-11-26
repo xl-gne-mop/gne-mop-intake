@@ -1,6 +1,6 @@
 // lists.json -> the project and settings shapes the Rebuild 4 code uses (cfg().projects, cfg().rules ...).
 // Contacts / approvers: one person per line, "Name | Title | Company | Phone" (approvers without phone),
-// in template order. Anything else ("TO FILL", blank) gives the Rebuild 4 default role rows with blank names.
+// in template order (a line with a blank name keeps that slot's role). Anything else ("TO FILL", blank) gives the Rebuild 4 default role rows with blank names.
 
 export const CONTACT_ROLES = [['Sr. Principal Project Manager', 'Genentech'], ['Campus Manager', 'Genentech'], ['User Team Lead', 'Genentech'], ['Lab Manager', 'Genentech'], ['Sr. Project Manager', 'XL Construction'], ['Superintendent', 'XL Construction'], ['MEP Coordinator', 'XL Construction'], ['Foreman (Person-in-Charge)', 'XL Construction']];
 export const APPROVER_ROLES = [['Sr. Project Manager', 'Genentech'], ['Campus Manager', 'Genentech'], ['JLL', 'Genentech'], ['User Team Lead', 'Genentech'], ['Lab Manager', 'Genentech'], ['MEP Coordinator', 'XL Construction']];
@@ -26,6 +26,8 @@ export function projectFromRow(r) {
   };
 }
 
+import { reviewSettings } from '../rules/review-settings.js';
+
 const val = (s, k, d) => (s && s[k] && s[k].value !== undefined && s[k].value !== '' ? s[k].value : d);
 
 /**
@@ -50,6 +52,12 @@ export function cfgFromLists(lists, { defaultRules, folderUrl = '' } = {}) {
     pilotDefault: val(s, 'PilotMode', 'No') === 'Yes', trk: { ...DEFAULT_TRK },
     projects: ((lists && lists.projects) || []).map(projectFromRow).filter(p => p.id),
     editors: ((lists && lists.editors) || []).map(e => String(e).trim().toLowerCase()).filter(Boolean),
+    review: reviewSettings(s, val),
+    // MOP review 11/26/26 project directory (optional in lists.json): people to pre-fill the requester,
+    // trade contacts per project for the subcontractor contacts, campus info shown in Settings.
+    people: ((lists && lists.people) || []).filter(p => p && p.name).map(p => ({ name: String(p.name), title: p.title || '', company: p.company || '', phone: p.phone || '', email: String(p.email || '').trim().toLowerCase(), projects: p.projects || '' })),
+    trade: ((lists && lists.tradeContacts) || []).filter(p => p && p.name).map(p => ({ project: String(p.project || ''), trade: p.trade || '', company: p.company || '', name: String(p.name), title: p.title || '', phone: p.phone || '' })),
+    campusInfo: ((lists && lists.campusInfo) || []).filter(x => x && x.topic),
     notes: Object.fromEntries(Object.entries(s).map(([k, v]) => [k, (v && v.note) || '']))
   };
 }

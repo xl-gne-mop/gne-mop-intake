@@ -11,6 +11,7 @@ import { removeLib, loadLib } from './local.js';
 import { setSuggestionStatus } from './suggest.js';
 import { buildPublishedLibrary } from './publish.js';
 import { openStore } from '../store/db.js';
+import { fold } from '../rules/review.js';
 import { makeOp, putOpInTx } from '../store/outbox.js';
 
 async function libPut(e) { const db = await openStore(); await db.put('library', { ...e, savedAt: new Date().toISOString() }); await loadLib(); }
@@ -35,7 +36,7 @@ function ledFrom(e,target,bv,cur){return{target,bv,base:clone(e),cur:cur?clone(c
 function ledToEntry(L){const b=clone(L.base||{});delete b.gne;delete b.target;
  return{sys:{},sup:{},impacts:[],pre:[],checks:{},...b,id:L.target,kind:'std',name:L.name.trim(),tier:+L.tier||2,discipline:L.discipline,systemCode:L.systemCode||'00 General',lotoType:L.lotoType,
   keywords:L.keywords.split(',').map(x=>x.trim()).filter(Boolean),basis:lnz(L.basis),steps:lnz(L.steps).map(l=>{const m=/^(.*?)\s*\|\s*([^|]*)$/.exec(l);return m?[m[1].trim(),m[2].trim()]:[l,'']}),
-  gonogo:lnz(L.gonogo).slice(0,4).join('\n'),backout:lnz(L.backout).slice(0,4).join('\n'),rts:lnz(L.rts).join('\n'),alarms:lnz(L.alarms),permits:lnz(L.permits),tools:lnz(L.tools).slice(0,10).join('\n'),crew:lnz(L.crew).slice(0,10).join('\n'),safety:L.safety.trim(),summary:L.summary.trim(),ver:L.bv?nextVer(L.bv,L.major):'1.0',owner:'JK'}}
+  gonogo:fold(lnz(L.gonogo),4).join('\n'),backout:fold(lnz(L.backout),4).join('\n'),rts:lnz(L.rts).join('\n'),alarms:lnz(L.alarms),permits:lnz(L.permits),tools:fold(lnz(L.tools),10).join('\n'),crew:fold(lnz(L.crew),10).join('\n'),safety:L.safety.trim(),summary:L.summary.trim(),ver:L.bv?nextVer(L.bv,L.major):'1.0',owner:'JK'}}
 function libCompare(L){const o=ledFrom(L.cur,'',''),secs=[['name','Name'],['steps','Steps'],['gonogo','Go / No-Go'],['backout','Back-out'],['rts','Return to service'],['alarms','Alarms'],['tools','Tools'],['crew','Crew'],['basis','Basis'],['keywords','Keywords']];let h='';
  secs.forEach(([k,l])=>{const sp=k==='keywords'?t=>t.split(',').map(x=>x.trim()).filter(Boolean):lnz,a=sp(o[k]),b=sp(L[k]),rm=a.filter(x=>!b.includes(x)),ad=b.filter(x=>!a.includes(x));
   if(rm.length||ad.length)h+=`<p class="u-3a361f"><b class="u-789157">${l}</b></p>${rm.map(x=>`<div class="small u-862e70">− ${esc(x)}</div>`).join('')}${ad.map(x=>`<div class="small u-41984d">+ ${esc(x)}</div>`).join('')}`});

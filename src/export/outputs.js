@@ -4,6 +4,7 @@ import { R, S, STEPS, STATUSES, SIDE, UTIL, GROUPS, SYSTEM_CODES, LOTO_CATS, CAT
 import { ensureX } from '../core/record.js';
 import { tierOf, TIER_NAME } from '../rules/tier.js';
 import { sigOf } from '../approve/signatures.js';
+import { reviewPrint, mergeRefs } from '../rules/review.js';
 
 /* JK decision P1: the Rebuild 5 print additions are on unless lists.json PrintAdditions = No, which prints
    exactly the Rebuild 4 MOP. Both versions are verbatim (r4:487, r5:667-676); sri.js is untouched either way. */
@@ -17,6 +18,7 @@ function outRecordR5(q){const r=ensureX(clone((q.sub||q).record));const j=q.meta
  const t=tierOf(r),add=[`Risk ${TIER_NAME[t.t].replace('Tier','tier')}${t.why.length?' ('+t.why.join(', ')+')':''}`];
  if(x.backfeed==='Yes')add.push('Other power source: '+x.backfeedSrc.trim()+' – locked out');else if(x.backfeed==='No')add.push('No other power source (checked in the field)');
  if(x.cold==='Yes')add.push('Cold storage on the outage – temperature plan in section 2');if(x.eyewash==='Yes')add.push('Eyewash / shower coverage in section 2');if(x.dp.trim())add.push('Room pressure to restore: '+x.dp.trim());
+ mergeRefs(q,r);add.push(...reviewPrint(r)); // MOP review 11/26/26: references, permits, flags, point details, emergency numbers (empty = nothing added)
  if(x.lib&&x.lib.ver)add.push(`Built from library work type "${x.lib.name}" v${x.lib.ver}`);
  r.safety=[r.safety.trim().replace(/\.?$/,r.safety.trim()?'.':''),add.join('. ')+'.'].filter(Boolean).join(' ');return R.parseRecord(r)}
 function jllText(q){const sub=q.sub,rec=outRecord(q);let t=R.jllPacket(rec,proj(q.project),q.mopNo,sub?sub.rev:q.rev,now(),cfg().rules);

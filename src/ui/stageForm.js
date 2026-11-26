@@ -3,6 +3,7 @@
 import { R, esc, cfg, proj, mopLabel, now, fS } from '../core/state.js';
 import { STAGE_NAMES, stageMeta } from '../model/stages.js';
 import { outRecord, jllText } from '../export/outputs.js';
+import { refsNeeded } from '../rules/review.js';
 
 export function stageStrip(q) {
   const si = q.stage || 0;
@@ -21,7 +22,8 @@ export function stageForm(q) {
   if (n === 5) b = `${jll ? `<label class="f"><span>JLL LOTO # (required)</span><input data-jr="lotoNo" value="${esc(lotoNo)}"></label>` : ''}
    <label class="ck"><input type="checkbox" data-st="notified" ${st.notified ? 'checked' : ''}><span>Impact notification sent</span></label>
    <label class="ck"><input type="checkbox" data-st="lotoWalk" ${st.lotoWalk ? 'checked' : ''}><span>LOTO walk done</span></label>`;
-  if (n === 6) b = `<p>Marks the MOP as out for approval. Approvers sign their rows (below) as they come back.</p>`;
+  if (n === 5 && r.loto.needed === 'Yes') b += `<label class="f"><span>JLL LOTO WO # (needed before it goes out for approval)</span><input data-jr="lotoWO" value="${esc((q.meta.jllRef && q.meta.jllRef.lotoWO) || r.jllRef.lotoWO || '')}"></label>`;
+  if (n === 6) b = `<p>Marks the MOP as out for approval. Approvers sign their rows (below) as they come back.</p>${refsNeeded(q, r).map(([k, l, v]) => `<label class="f"><span>${esc(l)} (required)</span><input data-rf="${k}" value="${esc(v)}"></label>`).join('')}`;
   if (n === 7) b = `<p class="small">Every approver row below must be signed or recorded. An “_Approved” copy is saved to Drive when this syncs.</p>`;
   if (n === 8) b = `<label class="ck"><input type="checkbox" data-meta="campus" ${q.meta.campus ? 'checked' : ''}><span>Campus notification sent</span></label>`;
   if (n === 9) b = `<label class="ck"><input type="checkbox" data-st="workDone" ${st.workDone ? 'checked' : ''}><span>Work done</span></label>

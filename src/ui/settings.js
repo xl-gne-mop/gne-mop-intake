@@ -32,6 +32,11 @@ function vSettings(){const c=cfg(),ed=S.canEdit,rl=c.rules;
   <dt>Second-person isolation check</dt><dd>Tier ${esc(rl.twoPerson)} and up ${note('SecondCheckTier')}</dd>
   <dt>Holidays</dt><dd>${rl.holidays.map(h=>esc(fS(pdDay(h)))).join(', ')} ${note('Holidays')}</dd>
   <dt>Pilot mode</dt><dd><label class="ck"><input type="checkbox" data-pilot ${S.pilotOn?'checked':''} ${pilotIdsSet()?'':'disabled'}><span>Bigger buttons, time in the app and pilot feedback on each request (Logs → Pilot). Sync goes to the pilot tracker and sheet.</span></label>${pilotIdsSet()?'':`<small>${esc(PILOT_NEEDS_IDS)}</small>`}</dd>
+  ${c.review?`<dt>Emergency numbers (print on every MOP)</dt><dd>${[c.review.emergency,c.review.security,c.review.er&&'Nearest ER: '+c.review.er,c.review.fls&&'SSF FLS hotline '+c.review.fls].filter(Boolean).map(esc).join('<br>')||'<span class="pill amb">Not set</span>'} ${note('EmergencyContact')}</dd>
+  <dt>Permit lead times (days)</dt><dd>${Object.entries(c.review.permitLead).map(([k,v])=>esc(k+' '+v)).join(', ')||'<span class="pill amb">Not set</span>'} ${note('PermitLeadDays')}</dd>
+  <dt>Hot tap / line freeze</dt><dd>Job walk ${esc(c.review.jobWalkDays)} days before; permit valid ${esc(c.review.permitMaxHours)} hours ${note('PermitMaxHours')}</dd>
+  <dt>Safe Work Plan / EHS checklist</dt><dd>${esc(c.review.swpLeadDays)} / ${esc(c.review.ehsLeadDays)} days before start ${note('SWPLeadDays')}</dd>`:''}
+  ${(c.campusInfo||[]).length?`<dt>Campus info</dt><dd><ul class="plain">${c.campusInfo.map(x=>`<li><b>${esc(x.topic)}</b>: ${esc(x.detail)}${x.contact?' · '+esc(x.contact):''}${x.phone?' '+esc(x.phone):''}</li>`).join('')}</ul></dd>`:''}
   <dt>Rebuild 5 print additions</dt><dd>${c.printAdditions?'On':'Off (prints exactly the Rebuild 4 MOP)'}</dd>
   <dt>Template additions (11/24/26)</dt><dd>${c.additions?'On':'Off'}</dd><dt>Marked-up LOTO attachments required</dt><dd>${c.requireMarkup?'Yes':'No'}</dd></dl></div>`}
 
