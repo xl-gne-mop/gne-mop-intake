@@ -8,7 +8,7 @@ import { createGoogleApi } from './google-api.js';
 import { drain } from './engine.js';
 import { resolveConflict as resolveIn } from './reconcile.js';
 import { listRemote, openRemote } from './remote.js';
-import { buildMop, trackerVals, lotoVals } from '../export/outputs.js';
+import { buildMop, trackerVals, lotoVals, smartsheetVals } from '../export/outputs.js';
 
 const C = () => globalThis.MOP_CONFIG || {};
 const stateStore = {
@@ -41,7 +41,7 @@ export function createDrain({ getToken, fetch: fetchFn } = {}) {
       getReq: async id => { const db = await openStore(); return db.get('requests', id); },
       saveLocal, blob: id => S.blobs[id] || null, now: () => R.siteNow(),
       canEdit: async id => { const m = await api.getMeta(id, 'capabilities(canEdit)'); return !!(m.capabilities && m.capabilities.canEdit); },
-      build: { mop: buildMop, trackerVals, lotoVals, jllNeeded: R.jllNeeded }
+      build: { mop: buildMop, trackerVals, lotoVals, smartsheetVals, jllNeeded: R.jllNeeded }
     });
     S.conflicts = await listConflicts();
     if (S.hooks.saved) S.hooks.saved();

@@ -3,7 +3,7 @@
 // "Don't know" buttons, guided dictation, safety fixes, Tier 1 skip). Inline styles -> classes (scripts/port_helpers.py).
 import { R, S, STEPS, STATUSES, SIDE, UTIL, GROUPS, SYSTEM_CODES, LOTO_CATS, CAT_MAP, CONTACT_ROLES, APPROVER_ROLES, ICON_MIC, $, esc, clone, uidGen, cfg, proj, safeUrl, pad3, mopLabel, toast, now, fS, fL, isoDay, pdDay, fromIso, fileUrl, D, later, render, saveDraft } from '../core/state.js';
 import { gapsFor, notesFor } from '../core/record.js';
-import { allEntries, autoPick, libById, libPanel, similarPast, stepsTotal, fmtMin } from '../lib/library.js';
+import { allEntries, autoPick, libById, libPanel, similarPast, stepsTotal, fmtMin, libImpactsMissing } from '../lib/library.js';
 import { importPanel } from '../import/read.js';
 import { msgList } from './html.js';
 import { vBoard } from './board.js';
@@ -93,6 +93,7 @@ function stepBody(i){const r=D(),p=proj(S.draft.project),c=cfg();switch(i){
   return `<h2>Systems affected</h2>${qs.length?`<div class="qz"><b>Quick questions for this work</b>${qs.join('')}</div>`:''}<p class="sub">For each group the work touches, pick the impact level and what’s affected. Leave untouched groups blank.</p>${GROUPS.filter(x=>x.k!=='util'||c.additions).map(sysBlock).join('')}`}
  case 5:return `<h2>Impacts and mitigations</h2><p class="sub">Each thing that loses service or could be disrupted, and what will be done about it.</p>
   ${r.x.cold==='Yes'&&!impHas(r,/temperat|freez|cold room|incubat|setpoint/i)?'<button class="btn sm pri u-ef97c7" data-a="addImp" data-v="cold">Add cold storage impact</button>':''}${r.x.eyewash==='Yes'&&!impHas(r,/eye ?wash|shower/i)?'<button class="btn sm pri u-249d01" data-a="addImp" data-v="eyewash">Add eyewash impact</button>':''}
+  ${(()=>{const e=libById(r.x.lib&&r.x.lib.id),miss=e&&e.kind==='std'?libImpactsMissing(e,r):[];return miss.length&&r.impacts.some(i=>i.impact.trim())?`<div class="qz"><b>From the library: ${esc(e.name)}</b><p class="small u-54eb29">${miss.length} more impact${miss.length>1?'s':''} with ${miss.length>1?'their mitigations':'its mitigation'}. Tap to add them below what you have. You can change or remove any of them.</p><button class="btn sm pri" data-a="addLibImp">+ Add ${miss.length} library impact${miss.length>1?'s':''}</button></div>`:''})()}
   ${rep('impacts','impacts',20,k=>`Impact ${k+1}`,(b,x)=>`${seg('Kind',b+'.kind',['Planned','Potential'])}${inp('What’s impacted',b+'.impact',{area:1,rows:2})}${inp('Mitigation / path forward',b+'.mitigation',{area:1,rows:2})}`,'Add impact')}
   <div class="u-d6f2af">${inp('Who or what is affected?','users',{area:1,rows:2,req:1})}</div>
   ${(libById(r.x.lib&&r.x.lib.id)||{}).residualRisk||r.x.rv.riskBy?inp('End state and who accepts the residual risk','x.rv.riskBy',{req:1,dk:1,ph:'e.g. purity results due up to 4 weeks after; accepted by the GNE system owner'}):''}`;

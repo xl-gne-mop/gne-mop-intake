@@ -1,12 +1,14 @@
-:root { --navy: #022F41; --gold: #D6981F; --brick: #8A2C0F; --ink: #27323A; --mut: #4F6475; }
+:root { color-scheme: light dark; --navy: #022F41; --gold: #D6981F; --brick: #8A2C0F; --ink: #27323A; --mut: #4F6475; --bg: #fff; --head: #022F41; --line: #d5dbe1; --tipbg: #fff7e6; --tap: #022F41; }
+/* follows the phone: dark mode gets a dark page (same colours as the app) */
+@media (prefers-color-scheme: dark) { :root { --ink: #e6ecef; --mut: #b9c6ce; --bg: #0b1820; --head: #8cc3d9; --line: #24394a; --tipbg: #33280f; --tap: #0f5a78; } }
 * { box-sizing: border-box; }
-body { margin: 0; font: 21px/1.5 "Trebuchet MS", "Segoe UI", sans-serif; color: var(--ink); background: #fff; padding-bottom: env(safe-area-inset-bottom); }
+body { margin: 0; font: 21px/1.5 "Trebuchet MS", "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); padding-bottom: env(safe-area-inset-bottom); }
 header { background: var(--navy); color: #fff; padding: calc(14px + env(safe-area-inset-top)) 18px 14px; border-bottom: 5px solid var(--gold); }
 header h1 { margin: 0; font-size: 28px; } header p { margin: 4px 0 0; font-size: 17px; color: #d6dbe6; }
 main { max-width: 760px; margin: 0 auto; padding: 8px 18px 40px; }
-a.back { display: inline-flex; align-items: center; min-height: 48px; padding: 0 18px; margin: 14px 0 4px; border: 2px solid var(--navy); border-radius: 8px; color: var(--navy); font-weight: 700; text-decoration: none; }
-section { border-top: 1px solid #d5dbe1; padding: 18px 0; }
-h2 { font-size: 25px; margin: 0 0 8px; color: var(--navy); } h2 .n { display: inline-flex; width: 40px; height: 40px; border-radius: 50%; background: var(--gold); color: var(--navy); align-items: center; justify-content: center; margin-right: 10px; }
-img { display: block; width: 100%; max-width: 420px; border: 1px solid #c9d1d9; border-radius: 10px; margin: 12px 0; }
-.tip { background: #fff7e6; border-left: 6px solid var(--gold); padding: 10px 14px; border-radius: 4px; }
-b.tap { background: var(--navy); color: #fff; padding: 1px 8px; border-radius: 4px; white-space: nowrap; }
+a.back { display: inline-flex; align-items: center; min-height: 48px; padding: 0 18px; margin: 14px 0 4px; border: 2px solid var(--head); border-radius: 8px; color: var(--head); font-weight: 700; text-decoration: none; }
+section { border-top: 1px solid var(--line); padding: 18px 0; }
+h2 { font-size: 25px; margin: 0 0 8px; color: var(--head); } h2 .n { display: inline-flex; width: 40px; height: 40px; border-radius: 50%; background: var(--gold); color: var(--navy); align-items: center; justify-content: center; margin-right: 10px; }
+img { display: block; width: 100%; max-width: 420px; border: 1px solid var(--line); border-radius: 10px; margin: 12px 0; }
+.tip { background: var(--tipbg); border-left: 6px solid var(--gold); padding: 10px 14px; border-radius: 4px; }
+b.tap { background: var(--tap); color: #fff; padding: 1px 8px; border-radius: 4px; white-space: nowrap; }

@@ -63,7 +63,16 @@ function buildTracker(list){const c=cfg(),T=tplParts('trk');let x=R.strFromU8(T[
  else{const id=(/Id="(rId\d+)"[^>]*REPLACE_FOLDER/.exec(rels)||[])[1];rels=rels.replace(/<Relationship [^>]*REPLACE_FOLDER[^>]*\/>/,'');if(id)x=x.replace(new RegExp(`<hyperlink [^>]*r:id="${id}"[^>]*/>`),'').replace('<hyperlinks></hyperlinks>','')}
  T['xl/worksheets/sheet2.xml']=R.strToU8(x);T['xl/worksheets/_rels/sheet2.xml.rels']=R.strToU8(rels);return R.zipSync(T,{level:6})}
 function lotoVals(q){const rec=outRecord(q),stamp=fromIso(q.sub.at);return R.lotoRows(rec,proj(q.project),stamp).map(r=>{const v=r.slice();v[0]=r[0]==='TRUE';const s=R.startOf(rec);v[4]=s?{date:s}:'';return v})}
+/* Smartsheet LOTO-request columns A–K for each row: one row per isolation point (the LOTO log values), or, when the
+   request has no LOTO points, one row filled from the intake form instead of left blank. "Duration of LOTO" is a
+   DATE column in the sheet, so it gets the planned end date; Timestamp is the submit time (MM/DD/YY h:mm AM). */
+const p2=n=>String(n).padStart(2,'0');
+const ssStamp=d=>d?`${p2(d.getMonth()+1)}/${p2(d.getDate())}/${p2(d.getFullYear()%100)} ${d.getHours()%12||12}:${p2(d.getMinutes())} ${d.getHours()<12?'AM':'PM'}`:'';
+function smartsheetVals(q){const rec=outRecord(q),p=proj(q.project)||{},at=fromIso(q.sub.at),s=R.startOf(rec),e=R.endOf(rec);
+ const loc=`${rec.bldg} – ${String(rec.areas||'').replace(/\n/g,'; ')}`;
+ const rows=rec.loto.needed==='Yes'&&rec.loto.points.length?lotoVals(q):[[false,p.job||p.label||'',rec.req.name,rec.req.company,s?{date:s}:'',loc,rec.equip,'No LOTO needed',String(rec.users||rec.areas||'').trim(),'','']];
+ return rows.map(v=>{const o=v.slice();o[9]=e?{date:e}:'';o[10]=ssStamp(at);return o})}
 function buildLoto(list){const O=tplParts('loto');let x=R.strFromU8(O['xl/worksheets/sheet1.xml']);const rows=list.flatMap(lotoVals);
  x=R.fillSheet(x,2,'A',rows.length?rows:[[]],2,dom);O['xl/worksheets/sheet1.xml']=R.strToU8(x);return R.zipSync(O,{level:6})}
 
-export { outRecordR4, outRecordR5, outRecord, jllText, dom, b64, tplParts, imgSize, buildMop, trackerVals, buildTracker, lotoVals, buildLoto };
+export { outRecordR4, outRecordR5, outRecord, jllText, dom, b64, tplParts, imgSize, buildMop, trackerVals, buildTracker, lotoVals, buildLoto, smartsheetVals };

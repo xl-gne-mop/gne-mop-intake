@@ -184,6 +184,16 @@ async function syncRequestJson(q, st, d, mopFolder, save) {
   Object.assign(st.drive, { requestJsonText: merged, requestJsonTime: f.modifiedTime || '' }); st.base.requestJson = JSON.parse(merged).request; await save();
 }
 
+/** "XL JOB # NAME" is a dropdown in the sheet (".13 B5 STEAM", ".01/02 B5 SEISMIC"): pick the option for this
+ *  project by its number after the dot, else an option equal to the label; '' when none matches (the label is kept). */
+export function ssJob(sheet, proj) {
+  const col = (sheet.columns || []).find(c => c.title === 'XL JOB # NAME'), opts = (col && col.options) || [];
+  if (!opts.length || !proj) return '';
+  const label = String(proj.job || proj.label || '').trim(), sfx = (/\.(\d+)/.exec(String(proj.id || '')) || [])[1];
+  const byNo = sfx && opts.find(o => { const m = /^\s*(?:\d+)?\.([\d/]+)/.exec(o); return m && m[1].split('/').some(n => n === sfx); });
+  return byNo || opts.find(o => o.trim().toLowerCase() === label.toLowerCase()) || '';
+}
+
 async function syncSmartsheet(q, st, d, { proj, jll, rev, mopLink, now, readSheet, save, newRev }) {
   const sheet = await readSheet(), byTitle = Object.fromEntries((sheet.columns || []).map(c => [c.title, c.id]));
   const rec = q.sub.record, lotoNo = ((q.meta.jllRef || {}).lotoNo || (rec.jllRef || {}).lotoNo || '').trim();
@@ -192,13 +202,17 @@ async function syncSmartsheet(q, st, d, { proj, jll, rev, mopLink, now, readShee
   const common = { 'Request ID': st.requestId, Stage: stageByNo(q.stage).name, 'MOP #': mop3(q.mopNo), 'MOP Link': mopLink, 'Tracker Row': String(st.trackerRow || ''), 'Needs Sync': false };
   const cell = (title, value) => (byTitle[title] ? { columnId: byTitle[title], value } : null);
   const ids = Object.values(st.ss.rows);
+  // Every intake column, per row (one row per LOTO point; one row filled from the form when there is no LOTO).
+  const lv = d.build.smartsheetVals ? d.build.smartsheetVals(q)
+    : rec.loto.needed === 'Yes' && rec.loto.points.length ? d.build.lotoVals(q) : [[false, proj.label, rec.req.name, rec.req.company, '', `${rec.bldg} – ${rec.areas.split('\n')[0]}`, '', '', '', '', '']];
+  const job = ssJob(sheet, proj);
+  const intake = v => ({
+    ...Object.fromEntries(STAGE_MAP.smartsheet.original.map((t, i) => [t, i === 1 && job ? job : v[i] && v[i].date ? ymd(new Date(v[i].date)) : v[i]])),
+    'Work Scope': rec.scope, 'Category/Discipline': rec.discipline, Priority: rec.priority, 'System In Use?': rec.inService, 'Need JLL?': !!jll, 'Need Siemens?': rec.sup.siemens === 'Yes', 'Contact Phone': rec.req.phone, 'MOP #': common['MOP #']
+  });
   if (!ids.length) {
-    const lv = rec.loto.needed === 'Yes' && rec.loto.points.length ? d.build.lotoVals(q) : [[false, proj.label, rec.req.name, rec.req.company, '', `${rec.bldg} – ${rec.areas.split('\n')[0]}`, '', '', '', '', '']];
-    const orig = STAGE_MAP.smartsheet.original;
-    const rows = lv.map(v => ({ toBottom: true, cells: [
-      ...orig.map((t, i) => cell(t, v[i] && v[i].date ? ymd(new Date(v[i].date)) : v[i])),
-      ...Object.entries({ ...common, 'Work Scope': rec.scope, 'Category/Discipline': rec.discipline, Priority: rec.priority, 'System In Use?': rec.inService, 'Need JLL?': !!jll, 'Need Siemens?': rec.sup.siemens === 'Yes', 'Contact Phone': rec.req.phone, 'JLL LOTO #': lotoNo, 'App Notes': appNotes('') }).map(([t, v2]) => cell(t, v2))
-    ].filter(Boolean).filter(c => c.value !== undefined && c.value !== '') }));
+    const rows = lv.map(v => ({ toBottom: true, cells: Object.entries({ ...intake(v), ...common, 'JLL LOTO #': lotoNo, 'App Notes': appNotes('') }).map(([t, v2]) => cell(t, v2))
+      .filter(Boolean).filter(c => c.value !== undefined && c.value !== '') }));
     const r = await d.ss(`/sheets/${d.sheetId}/rows`, { method: 'POST', body: JSON.stringify(rows) });
     const out = (await r.json()).result || [];
     out.forEach((row, i) => { st.ss.rows[i] = row.id; st.base.smartsheet[row.id] = Object.fromEntries(rows[i].cells.map(c => [c.columnId, c.value])); });
@@ -211,10 +225,12 @@ async function syncSmartsheet(q, st, d, { proj, jll, rev, mopLink, now, readShee
   if (q.stage >= 9) want['LOTO Removal?'] = true;
   if (st.stagesWritten.smartsheet === q.stage && st.revWritten.smartsheet === rev && !pendingNotes.length && !(st.retry && st.retry.smartsheet)) return;
   const updates = [];
-  for (const rowId of ids) {
+  for (const [i, rowId] of Object.entries(st.ss.rows)) {
     const remoteRow = (sheet.rows || []).find(r => r.id === rowId) || { cells: [] };
     const remote = Object.fromEntries(remoteRow.cells.map(c => [c.columnId, c.value]));
-    const local = Object.fromEntries(Object.entries(want).filter(([t]) => byTitle[t]).map(([t, v]) => [byTitle[t], v]));
+    // a revision can change the intake answers: refresh them too (never blanks a cell; Timestamp and LOTO Removal? stay)
+    const fresh = lv[+i] ? Object.fromEntries(Object.entries(intake(lv[+i])).filter(([t, v]) => t !== 'Timestamp' && t !== 'LOTO Removal?' && v !== undefined && v !== '')) : {};
+    const local = Object.fromEntries(Object.entries({ ...fresh, ...want }).filter(([t]) => byTitle[t]).map(([t, v]) => [byTitle[t], v]));
     if (byTitle['App Notes'] && pendingNotes.length) local[byTitle['App Notes']] = appNotes(remote[byTitle['App Notes']] || '');
     const where = `Smartsheet row ${rowId}`, title = cid => (sheet.columns.find(x => String(x.id) === String(cid)) || {}).title || cid;
     const m = merge3(Object.keys(local).filter(cid => !keptTheirs(st, where, title(cid), local[cid])), local, st.base.smartsheet[rowId] || null, remote, 'smartsheet');

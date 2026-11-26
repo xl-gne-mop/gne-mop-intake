@@ -3,6 +3,7 @@
 import { R, S, STEPS, STATUSES, SIDE, UTIL, GROUPS, SYSTEM_CODES, LOTO_CATS, CAT_MAP, CONTACT_ROLES, APPROVER_ROLES, ICON_MIC, $, esc, clone, uidGen, cfg, proj, safeUrl, pad3, mopLabel, toast, now, fS, fL, isoDay, pdDay, fromIso, fileUrl, D, later } from '../core/state.js';
 import { newRecord } from '../core/record.js';
 import { libMatches } from '../lib/library.js';
+import { splitImpacts } from './impacts.js';
 
 function parseMopDocx(u8){const parts=R.unzipSync(u8),xml=parts['word/document.xml'];if(!xml)throw new Error('Not a Word document');
  const doc=new DOMParser().parseFromString(R.strFromU8(xml),'application/xml'),W='http://schemas.openxmlformats.org/wordprocessingml/2006/main',W14='http://schemas.microsoft.com/office/word/2010/wordml';
@@ -15,7 +16,8 @@ function parseMopDocx(u8){const parts=R.unzipSync(u8),xml=parts['word/document.x
  const H=/^(\d{1,2})\. (Cont\. )?(Impact Notification|Impact Description|Personnel Contact|Safety Requirements|Required Tools|Required Personnel|Detailed Step-by-Step|Go \/ No-Go|Back-Out|MOP Author|Owner|Qualified)/;
  let sec=0,grp=null,mopNo='',tools=[],crew=[],gn=[],bo=[],rts=[];
  const strip=t=>t.replace(/^\s*(\d+[.)]|[-•*])\s*/,'').trim();
- const impLines=(c,kind)=>paras(c).slice(1).filter(Boolean).forEach(l=>{const t=strip(l),m=/^(.*?)\.?\s*Mitigation:\s*(.*)$/i.exec(t);rec.impacts.push({kind,impact:m?m[1]:t,mitigation:m?m[2]:''})});
+ /* "Mitigation:", an arrow, or a "Mitigations:" paragraph splits impact and mitigation (src/import/impacts.js) */
+ const impLines=(c,kind)=>rec.impacts.push(...splitImpacts(paras(c).slice(1).filter(Boolean).map(l=>({kind,impact:strip(l),mitigation:''}))));
  rows.forEach((tr,ri)=>{const cs=cells(tr),ct=cs.map(txt),all=ct.join(' '),hm=H.exec(all);
   if(ri===0){const ck=checks(tr);[['High','H'],['Medium','M'],['Low','L']].forEach(([l,v])=>{if(ck.some(c=>c.on&&c.lab===l))rec.priority=v});mopNo=((/#\s*(\S+)\s*rev\s*(\S+)/i.exec(all))||[]).slice(1).join(' rev ');return}
   if(hm){sec=+hm[1];grp=null;if(sec===2){}return}

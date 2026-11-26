@@ -4,6 +4,7 @@ import { R, S, STEPS, STATUSES, SIDE, UTIL, GROUPS, SYSTEM_CODES, LOTO_CATS, CAT
 import { ensureX } from '../core/record.js';
 import { allEntries, autoPick, chooseEntry, libById } from '../lib/library.js';
 import { parseMopDocx } from './docx.js';
+import { splitImpacts } from './impacts.js';
 import { pdfjs } from '../attach/markup.js';
 import { msgList } from '../ui/html.js';
 import { uploadBlob } from '../core/save.js';
@@ -13,7 +14,10 @@ async function readImport(file){const name=file.name,ext=(name.split('.').pop()|
  if(ext==='docx'){const o=parseMopDocx(u8);return{rec:o.rec,kind:'Word MOP',file:name,name:`${o.mopNo?'MOP #'+o.mopNo+' – ':''}${o.rec.title||name}`,info:[`Read MOP${o.mopNo?' #'+o.mopNo:''}: ${o.rec.steps.filter(x=>x.desc).length} during-MOP steps, ${o.rec.impacts.filter(x=>x.impact).length} impacts.`],warn:['Not in the MOP form, so answer these in the app: discipline, in service, support questions, LOTO points and attachments.']}}
  if(ext==='pdf'){const L=await pdfjs(),doc=await L.getDocument({data:u8.slice(0)}).promise,lines=await window.MOPIMP.pdfLines(doc);
   if(lines.length<10)throw new Error('This PDF has no readable text (it may be a scan). Save the MOP from Word as PDF, or use the Excel intake.');
-  const o=window.MOPIMP.parseMopLines(lines);return{...o,kind:'PDF MOP',file:name,name:`${o.mopNo?'MOP #'+o.mopNo+' – ':''}${o.rec.title||name}`,pdf:file}}
+  const o=window.MOPIMP.parseMopLines(lines);
+  /* the reference parser only splits on "Mitigation:"; also split arrows and "Mitigations:" paragraphs */
+  const imps=splitImpacts(o.rec.impacts);if(imps.length)o.rec.impacts=imps;if(o.warn&&o.rec.impacts.every(i=>!i.impact||i.mitigation))o.warn=o.warn.filter(w=>!/mitigation written inside/.test(w));
+  return{...o,kind:'PDF MOP',file:name,name:`${o.mopNo?'MOP #'+o.mopNo+' – ':''}${o.rec.title||name}`,pdf:file}}
  throw new Error('Use a PDF or Word MOP form, or the Excel intake (.xlsx).')}
 function importPanel(){const im=S.impNew;return `<div class="zone"><b class="u-789157">Import a filled MOP form or the Excel intake</b> <span class="small">(optional)</span>
  <p class="small u-54eb29">PDF or Word MOP in the GNE / XL form, or the Excel intake template. The app reads it into this draft; you review every screen before Submit.</p>

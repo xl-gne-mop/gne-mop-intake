@@ -33,12 +33,21 @@ function similarPast(q){const r=q.record,t=recText(r);
 function tok(s,r){const pts=r.loto.needed==='Yes'?r.loto.points.filter(p=>p.equip||p.point).map(p=>[p.equip,p.point].filter(Boolean).join(' ')).join('; '):'';
  const m={EQUIP:r.equip.trim()||'the equipment',LOTO:pts||'the isolation points',AREA:(r.areas.trim().split('\n')[0])||'the work area',BLDG:r.bldg||'the building',SUB:r.req.company||'the Sub'};
  return String(s||'').replace(/\{(EQUIP|LOTO|AREA|BLDG|SUB)\}/g,(_,k)=>m[k])}
+/* Library impacts (with mitigations) for this request that it does not have yet, compared by impact text. */
+const impKey=t=>norm(t).trim();
+function libImpactsMissing(e,r){if(!e||!e.impacts)return[];const have=new Set(r.impacts.map(i=>impKey(i.impact)));
+ return e.impacts.map(i=>({kind:i.kind,impact:tok(i.impact,r),mitigation:tok(i.mitigation,r)})).filter(i=>i.impact.trim()&&!have.has(impKey(i.impact)))}
+function addLibImpacts(e,r){const add=libImpactsMissing(e,r);if(!add.length)return 0;const keep=r.impacts.filter(i=>i.impact.trim()||i.mitigation.trim());
+ const room=Math.max(0,20-keep.length),a=add.slice(0,room);r.impacts=[...keep,...a];return a.length}
 /* Fill one screen's empty sections from the chosen entry. force=true replaces the step lists. */
 function fillFrom(e,step,force){const r=D(),f=[];if(!e)return f;
  if(step===1){if(!r.discipline&&e.discipline){r.discipline=e.discipline;f.push('discipline')}if(!r.system&&e.systemCode){r.system=e.systemCode;f.push('system code')}}
  if(step===4){const any=Object.values(r.sys).some(v=>v.level||v.items.length)||r.x.util.level||r.x.util.items.length;
   if(!any||force){Object.entries(e.sys||{}).forEach(([k,v])=>{if(r.sys[k]){r.sys[k].level=v.level||'';r.sys[k].items=(v.items||[]).slice();if(v.other)r.sys[k].other=v.other;if(v.notes)r.sys[k].notes=tok(v.notes,r)}});if(e.util&&cfg().additions)Object.assign(r.x.util,clone(e.util),{items:(e.util.items||[]).slice()});f.push('affected systems')}}
  if(step===5&&e.impacts&&e.impacts.length&&(force||!r.impacts.some(i=>i.impact.trim()))){r.impacts=e.impacts.map(i=>({kind:i.kind,impact:tok(i.impact,r),mitigation:tok(i.mitigation,r)}));f.push(`${r.impacts.length} impacts`)}
+ /* An imported MOP keeps its own impacts, so the library ones never filled in. On the first visit, if any imported
+    impact has no mitigation, add the library's impacts (with their mitigations) that are not there yet. */
+ else if(step===5&&!force&&r.x.imported&&!r.x.auto.impacts&&r.impacts.some(i=>i.impact.trim()&&!i.mitigation.trim())){const n=addLibImpacts(e,r);if(n)f.push(`${n} library impacts with mitigations`)}
  if(step===5&&!r.users.trim()){const loads=r.loto.needed==='Yes'?r.loto.points.flatMap(p=>R.lines(p.affected)):[];const u=[r.areas.trim()?r.areas.trim().split('\n')[0]+' (work area)':'',...loads.map(l=>l+' (loses service)')].filter(Boolean);if(u.length){r.users=[...new Set(u)].join('\n');f.push('who is affected')}}
  if(step===6){let n=0;Object.entries(e.sup||{}).filter(([k])=>k in r.sup).forEach(([k,v])=>{if(!r.sup[k]||force){r.sup[k]=v;n++}});if(n)f.push('support answers');['tools','crew','safety'].forEach(k=>{if(e[k]&&(force||!r[k].trim())){r[k]=e[k];f.push(k)}})}
  if(step===7){if(force||!r.pre.some(x=>x.desc.trim())){if(e.pre&&e.pre.length){r.pre=prefill(e,r);f.push('pre-MOP steps')}}
@@ -72,4 +81,4 @@ function libForImpact(kind){const re=IMPACT_RE[kind];if(!re)return null;const st
  /* explicit library field first (impactFor: 'cold' | 'eyewash'), else the type named for it that asks the same field check */
  return std.find(e=>e.impactFor===kind)||std.find(e=>re.test(e.name)&&e.checks&&e.checks[kind])||null}
 
-export { libForImpact, live, norm, STOP, words, sim, recText, entryFromRecord, allEntries, libById, libMatches, similarPast, tok, fillFrom, chooseEntry, autoPick, onArrive, libPanel, durMin, stepsTotal, fmtMin };
+export { libForImpact, libImpactsMissing, addLibImpacts, live, norm, STOP, words, sim, recText, entryFromRecord, allEntries, libById, libMatches, similarPast, tok, fillFrom, chooseEntry, autoPick, onArrive, libPanel, durMin, stepsTotal, fmtMin };

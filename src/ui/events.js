@@ -17,7 +17,7 @@ import { saveFile } from '../util/download.js';
 import { signOut } from '../auth/signout.js';
 import { countOutbox } from '../store/outbox.js';
 import { exportBackup } from '../store/backup.js';
-import { tok, autoPick, libForImpact } from '../lib/library.js';
+import { tok, autoPick, libForImpact, addLibImpacts } from '../lib/library.js';
 import { canSkip } from './screens.js';
 import { trackEdit, clearFlag } from './editHelpers.js';
 import { flagsOf } from '../rules/dontKnow.js';
@@ -100,6 +100,7 @@ app.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)retu
  if(a==='insHot'){const r=D(),w=workIdx(r);[['GNE permit authorizing individual inspects and signs the hot work permit','15 mins'],['Clear combustibles 35 ft or cover them; screens up; extinguisher at the work','20 mins'],['Siemens FLS isolates and covers the detectors near the hot work','15 mins']].reverse().forEach(([d,u])=>insStep(w,d,u));
   const w2=workIdx(D());insStep(w2+1,'Fire watch continues 60 mins after hot work ends','1 hour');insStep(w2+2,'Siemens FLS removes covers, restores and tests the detectors','20 mins');toast('Hot work steps added around the work step.');return rr()}
  if(a==='insAlarm'){const r=D();insStep(Math.max(0,r.steps.filter(x=>x.desc.trim()).length-1),'Siemens / GNE IT restores every suppressed alarm and point on the list; confirm none active','15 mins');return rr()}
+ if(a==='addLibImp'){const r=D(),e=libById(r.x.lib&&r.x.lib.id),n=e?addLibImpacts(e,r):0;if(!n){toast('Nothing more to add from the library.');return}r.x.auto.impacts=true;toast(`Added ${n} impact${n>1?'s':''} with mitigations from the library. Review and edit.`);return rr()}
  if(a==='addImp'){const r=D(),e=libForImpact(b.dataset.v);if(!e){toast('No library work type covers this yet. Type the impact.');return}const im=e.impacts.slice(0,b.dataset.v==='cold'?2:1).map(i=>({kind:i.kind,impact:tok(i.impact,r),mitigation:tok(i.mitigation,r)}));if(r.impacts.length===1&&!r.impacts[0].impact.trim())r.impacts=[];r.impacts.push(...im);toast('Impact added. Edit it to fit the job.');return rr()}
  if(a==='tagApply'){const r=D(),ft=findTags(r.scope),f=[];let sc=r.scope;ft.spoken.forEach(x=>{sc=sc.split(x.from).join(x.tag)});if(sc!==r.scope){r.scope=sc;f.push('tags cleaned up')}
   if(!r.equip.trim()&&ft.tags.length){r.equip=ft.tags.join(', ');f.push('equipment')}if(!r.bldg.trim()&&ft.bldg.length){r.bldg=ft.bldg[0];f.push('building')}

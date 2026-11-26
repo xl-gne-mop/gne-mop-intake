@@ -10,13 +10,22 @@ export function stageStrip(q) {
   return `<ol class="stages" aria-label="Stages">${STAGE_NAMES.map((s, k) => `<li class="${k + 1 < si ? 'done' : k + 1 === si ? 'cur' : ''}"><span>${esc(s)}</span></li>`).join('')}</ol>`;
 }
 
+/** Stage 2 (walked) starting values from the request: the numbered impacts, who is affected, and the numbered
+ *  mitigations, in the same order (tracker columns L, M, N). */
+export function walkDefaults(r) {
+  const imps = (r.impacts || []).filter(x => String(x.impact || '').trim()), num = a => a.map((t, i) => `${i + 1}. ${t}`).join('\n');
+  return { impacts: num(imps.map(x => x.impact.trim())), users: String(r.users || '').trim(), path: imps.some(x => String(x.mitigation || '').trim()) ? num(imps.map(x => String(x.mitigation || '').trim() || '–')) : '' };
+}
+
 export function stageForm(q) {
   const n = (q.stage || 0) + 1, st = stageMeta(q), r = (q.sub || q).record, jll = R.jllNeeded(r), lotoNo = (q.meta.jllRef && q.meta.jllRef.lotoNo) || r.jllRef.lotoNo || '';
   if (!q.sub || n > 9 || q.status === 'Draft') return '';
   let b = '';
-  if (n === 2) b = `<label class="f"><span>Downstream impacts (all equipment or impacts to users)</span><textarea data-st="walk.impacts" rows="3">${esc(st.walk.impacts)}</textarea></label>
-   <label class="f"><span>Impacted users, rooms or SiteOps</span><textarea data-st="walk.users" rows="2">${esc(st.walk.users)}</textarea></label>
-   <label class="f"><span>Path forward: a mitigation for each impact</span><textarea data-st="walk.path" rows="3">${esc(st.walk.path)}</textarea></label>`;
+  if (n === 2) { const w = walkDefaults(r), v = k => st.walk[k] || w[k];
+    b = `${w.impacts && !st.walk.impacts ? '<p class="small">Filled from the Impacts screen. Change anything the walk turned up.</p>' : ''}
+   <label class="f"><span>Downstream impacts (all equipment or impacts to users)</span><textarea data-st="walk.impacts" rows="4">${esc(v('impacts'))}</textarea></label>
+   <label class="f"><span>Impacted users, rooms or SiteOps</span><textarea data-st="walk.users" rows="2">${esc(v('users'))}</textarea></label>
+   <label class="f"><span>Path forward: a mitigation for each impact</span><textarea data-st="walk.path" rows="4">${esc(v('path'))}</textarea></label>`; }
   if (n === 3) b = `<p class="small">The next MOP revision is saved to Drive when this syncs; the old one moves to Superseded.</p>`;
   if (n === 4) b = jll ? `<label class="f"><span>JLL LOTO # (if already submitted)</span><input data-jr="lotoNo" value="${esc(lotoNo)}"></label>` : `<p>No JLL support on this request. Need JLL Support, Submitted and LOTO # will be marked N/A.</p>`;
   if (n === 5) b = `${jll ? `<label class="f"><span>JLL LOTO # (required)</span><input data-jr="lotoNo" value="${esc(lotoNo)}"></label>` : ''}
