@@ -5,7 +5,8 @@
 //   flow (response_type=token) to config.APP_URL with a random state that must come back unchanged.
 // - Tokens last about an hour and can't be refreshed silently: a token older than 55 minutes is treated as gone and
 //   the app shows one big "Sign in to sync" button. Local work never waits for this.
-import { randomState } from './tokens.js';
+import { randomState, stateOk } from './tokens.js';
+import { timed } from '../util/net.js';
 
 export const TOKEN_MAX_AGE_MS = 55 * 60 * 1000;
 export const GIS_SRC = 'https://accounts.google.com/gsi/client';
@@ -78,7 +79,7 @@ export function createGoogleAuth({ config, store, fetch: fetchFn = (...a) => glo
     const p = new URLSearchParams(h), saved = await store.get('google.state');
     await store.delete('google.state');
     win.history.replaceState(null, '', win.location.pathname + win.location.search + '#board');
-    if (!saved || p.get('state') !== saved.state) return { ok: false, error: 'Sign-in could not be checked. Tap Sign in to sync again.' };
+    if (!stateOk(saved, p.get('state'), now())) return { ok: false, error: 'Sign-in could not be checked. Tap Sign in to sync again.' };
     if (p.get('error') || !p.get('access_token')) return { ok: false, error: 'Google sign-in did not finish.' };
     await save({ access_token: p.get('access_token'), expires_in: p.get('expires_in'), scope: p.get('scope') });
     return { ok: true };
@@ -86,7 +87,7 @@ export function createGoogleAuth({ config, store, fetch: fetchFn = (...a) => glo
 
   async function userinfo() {
     const token = await getToken(); if (!token) throw Object.assign(new Error('Sign in to sync'), { status: 401 });
-    const r = await fetchFn(USERINFO, { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetchFn(USERINFO, timed({ headers: { Authorization: `Bearer ${token}` } }));
     if (r.status === 401) { await store.delete('google'); throw Object.assign(new Error('Sign in to sync'), { status: 401 }); }
     if (!r.ok) throw Object.assign(new Error(`Google answered ${r.status}`), { status: r.status });
     const u = await r.json(); return { email: String(u.email || '').toLowerCase(), name: u.name || '' };
@@ -94,7 +95,8 @@ export function createGoogleAuth({ config, store, fetch: fetchFn = (...a) => glo
 
   async function revoke() {
     const t = await store.get('google'); await store.delete('google');
-    if (t && t.access_token) { try { await fetchFn(`${REVOKE}?token=${encodeURIComponent(t.access_token)}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }); } catch { /* offline: the token expires within the hour anyway */ } }
+    // Token in the POST body, not the URL (URLs end up in logs and history).
+    if (t && t.access_token) { try { await fetchFn(REVOKE, timed({ method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ token: t.access_token }).toString() }, 10000)); } catch { /* offline: the token expires within the hour anyway */ } }
   }
 
   return { redirectUrl, save, getToken, preload, signIn, handleRedirect, userinfo, revoke };

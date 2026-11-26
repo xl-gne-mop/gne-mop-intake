@@ -7,7 +7,7 @@ import { STAGE_MAP } from '../sync/stageMap.js';
 const TRACKER = STAGE_MAP.tracker.columns;
 const fieldName = c => (c.where.startsWith('tracker') ? `${TRACKER[c.field] || c.field} (column ${c.field})` : c.field.replace(/^record\.|^meta\./, ''));
 const placeName = c => (c.where.startsWith('tracker') ? 'the tracker' : c.where.startsWith('Smartsheet') ? 'Smartsheet' : 'Drive');
-const show = v => esc(String(v ?? '').trim() || '(empty)').slice(0, 400);
+const show = v => esc((String(v ?? '').trim() || '(empty)').slice(0, 400)); // cut before escaping, never inside an &entity;
 
 export function conflictCards(requestId) {
   const list = (S.conflicts || []).filter(c => !requestId || c.requestId === requestId);

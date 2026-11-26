@@ -4,6 +4,7 @@
 // - If Drive can't be read, keeps using the saved copy and says so ("Using saved library from MM/DD/YY").
 // The token comes from the signed-in user (phase 5); fetch and cache are injectable for tests.
 import { mmddyy } from '../util/dates.js';
+import { timed, UPLOAD_TIMEOUT_MS } from '../util/net.js';
 
 export const KINDS = {
   library: { schema: 'gne-mop-library', label: 'library', store: 'library' },
@@ -43,7 +44,7 @@ export function idbCache(openStore) {
 }
 
 async function driveJson(fetchFn, url, token) {
-  const r = await fetchFn(url, { headers: { Authorization: `Bearer ${token}` } });
+  const r = await fetchFn(url, timed({ headers: { Authorization: `Bearer ${token}` } }, UPLOAD_TIMEOUT_MS)); // template.json is a few MB
   if (!r.ok) throw new ConfigError(`Drive answered ${r.status}`, { status: r.status });
   return r.json();
 }

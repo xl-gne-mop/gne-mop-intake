@@ -7,4 +7,7 @@ export const idbTokenStore = {
 };
 /** In-memory store with the same shape (unit tests). */
 export function memTokenStore() { const m = new Map(); return { m, get: async k => (m.has(k) ? structuredClone(m.get(k)) : null), put: async (k, v) => { m.set(k, structuredClone(v)); }, delete: async k => { m.delete(k); } }; }
+/** A saved OAuth state older than this is refused (the sign-in page was left open too long, or replayed). */
+export const STATE_MAX_AGE_MS = 15 * 60 * 1000;
+export const stateOk = (saved, got, now) => !!saved && typeof got === 'string' && got.length > 0 && got === saved.state && now - (saved.at || 0) <= STATE_MAX_AGE_MS;
 export function randomState() { const b = new Uint8Array(32); crypto.getRandomValues(b); return [...b].map(x => x.toString(16).padStart(2, '0')).join(''); }

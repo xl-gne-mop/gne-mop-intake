@@ -31,7 +31,7 @@ export async function drain(d) {
       if (!r) {
         const q = await d.getReq(op.requestId);
         if (!q) { await d.outbox.remove(op.id); continue; } // deleted on the phone
-        r = await reconcileWithSmartsheetGuard(q, { ...d, ss }, e => { ss = null; out.smartsheet = e.status === 403 ? DENIED : e.status === 0 ? e.message : 'Connect Smartsheet in Settings'; });
+        r = await reconcileWithSmartsheetGuard(q, { ...d, ss }, e => { ss = null; out.smartsheet = e.status === 403 ? DENIED : (e.status === 0 || e.status === -1) ? e.message : 'Connect Smartsheet in Settings'; });
         done.set(op.requestId, r);
         out.conflicts += (r.conflicts || []).filter(c => !c.resolved).length;
       }
@@ -54,7 +54,7 @@ export async function drain(d) {
 async function reconcileWithSmartsheetGuard(q, d, onDenied) {
   if (!d.ss) return reconcileRequest(q, d);
   const ss = async (...a) => {
-    let r; try { r = await d.ss(...a); } catch (e) { if (e.status === 403 || e.status === 401 || e.status === 0) e.smartsheet = true; throw e; }
+    let r; try { r = await d.ss(...a); } catch (e) { if (e.status === 403 || e.status === 401 || e.status === 0 || e.status === -1) e.smartsheet = true; throw e; }
     if (!r.ok) throw new ApiError(`Smartsheet answered ${r.status}`, r.status, 'smartsheet');
     return r;
   };
