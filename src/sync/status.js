@@ -12,7 +12,9 @@ import { requestPersistence } from '../pwa/persist.js';
 import { countOutbox } from '../store/outbox.js';
 
 const C = () => globalThis.MOP_CONFIG || {};
-export const SYNC = { state: 'idle', message: '', smartsheet: '', busy: false };
+// smartsheet: the Smartsheet line under the bar. ssError keeps the reason a Smartsheet sign-in failed, so a later
+// automatic check cannot replace it with a vaguer message. ssConnected: a Smartsheet sign-in is saved on this phone.
+export const SYNC = { state: 'idle', message: '', smartsheet: '', ssError: '', ssConnected: false, busy: false };
 
 export function createSession({ config = C(), store = idbTokenStore, fetch: fetchFn, win = globalThis.window, hooks = {} } = {}) {
   const google = createGoogleAuth({ config, store, fetch: fetchFn, win, useRedirect: () => isIOS(win.navigator) && isStandalone(win) });
@@ -37,7 +39,8 @@ export function createSession({ config = C(), store = idbTokenStore, fetch: fetc
     const g = await google.handleRedirect();
     if (g && !g.ok) SYNC.message = g.error;
     const s = await smartsheet.handleRedirect();
-    if (s) SYNC.smartsheet = s.ok ? 'Smartsheet connected.' : s.error;
+    if (s) { SYNC.smartsheet = s.ok ? 'Smartsheet connected.' : s.error; SYNC.ssError = s.ok ? '' : s.error; }
+    SYNC.ssConnected = await smartsheet.connected();
     SYNC.state = (await google.getToken()) ? 'signedIn' : 'signin';
     const id = await getIdentity(); if (id && !S.uid) { S.uid = id.email; S.meName = id.name; }
     changed();
@@ -71,7 +74,8 @@ export function createSession({ config = C(), store = idbTokenStore, fetch: fetc
       if (!smartsheet.ready()) SYNC.smartsheet = NOT_CONNECTED;
       else {
         try { const r = await smartsheet.api('/users/me'); if (r.ok && SYNC.smartsheet !== 'Smartsheet connected.') SYNC.smartsheet = ''; } // a check that works clears old problems, not the confirmation
-        catch (e) { if (e.status === 403) { SYNC.state = 'blocked'; SYNC.message = DENIED; return SYNC; } SYNC.smartsheet = e.message; }
+        catch (e) { if (e.status === 403) { SYNC.state = 'blocked'; SYNC.message = DENIED; return SYNC; } SYNC.smartsheet = SYNC.ssError || e.message; }
+        SYNC.ssConnected = await smartsheet.connected();
       }
       SYNC.state = 'signedIn'; SYNC.message = '';
       if (hooks.drain) {

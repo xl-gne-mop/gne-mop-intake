@@ -1,6 +1,7 @@
 // Settings.
 // Ported from reference/rebuild-4/index.html (r4:546-571).
 import { R, S, STEPS, STATUSES, SIDE, UTIL, GROUPS, SYSTEM_CODES, LOTO_CATS, CAT_MAP, CONTACT_ROLES, APPROVER_ROLES, ICON_MIC, $, esc, clone, uidGen, cfg, proj, safeUrl, pad3, mopLabel, toast, now, fS, fL, isoDay, pdDay, fromIso, fileUrl, D, later, render, saveDraft } from '../core/state.js';
+import { SYNC } from '../sync/status.js';
 import { vLibrary } from '../library/editor.js';
 import { pilotIdsSet, PILOT_NEEDS_IDS } from '../pilot/log.js';
 import { allEntries } from '../lib/library.js';
@@ -22,7 +23,7 @@ function vSettings(){const c=cfg(),ed=S.canEdit,rl=c.rules;
  return `<h1>Settings</h1>${tabs}<p class="sub">These come from lists.json in the Drive config folder. JK changes them there; this screen only shows them.${S.configMsg?` <b>${esc(S.configMsg)}</b>`:''}</p><div class="sheet">
   <dl class="kv"><dt>Signed in as</dt><dd>${esc(S.uid||'Not signed in yet')}${ed?' · editor':''}${S.uid?' <button class="btn sm" data-a="signout">Sign out</button>':''}</dd>
   ${S.signoutAsk?`<dt></dt><dd class="note warn">${esc(S.signoutAsk)} changes are not synced yet. Export a backup first?<div class="wnav"><button class="btn sm pri" data-a="signoutBackup">Export backup</button><button class="btn sm red" data-a="signoutForce">Sign out anyway</button><button class="btn sm" data-a="signoutCancel">Cancel</button></div></dd>`:''}
-  <dt>Smartsheet</dt><dd>${S.session&&S.session.smartsheet.ready()?'<button class="btn sm" data-a="ssConnect">Connect Smartsheet</button>':'Smartsheet not connected yet'}</dd>
+  <dt>Smartsheet</dt><dd>${S.session&&S.session.smartsheet.ready()?`${SYNC.ssConnected?'<p class="small">Connected on this phone.</p>':''}${SYNC.ssError?`<p class="syncmsg bad" role="status">${esc(SYNC.ssError)}</p>`:''}<button class="btn sm" data-a="ssConnect">${SYNC.ssConnected?'Connect Smartsheet again':'Connect Smartsheet'}</button>`:'Smartsheet not connected yet'}</dd>
   <dt>MOP to approval team</dt><dd>${esc(rl.mopLeadDays)} days before start ${note('MOPLeadDays')}</dd>
   <dt>JLL minimum notice</dt><dd>${esc(rl.jllMinWorkdays)} workdays ${note('JLLMinWorkdays')}</dd>
   <dt>JLL earliest request</dt><dd>${esc(rl.jllMaxWorkdays)} workdays ${note('JLLMaxWorkdays')}</dd>

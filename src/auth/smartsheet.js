@@ -8,6 +8,14 @@ export const DENIED = 'Not on the access list – ask JK';
 const AUTHORIZE = 'https://app.smartsheet.com/b/authorize';
 const REFRESH_EARLY_MS = 5 * 60 * 1000;
 
+// Plain messages with the relay's code, so JK can tell which setting to fix (docs/DEPLOY.md, step 3).
+export const NO_RELAY = 'Could not reach the Smartsheet relay (no answer). Check your signal and tap Connect Smartsheet again. If it keeps happening, ask JK.';
+export function relayMessage(status) {
+  if (status === 400 || status === 401) return `Smartsheet did not accept the sign-in (code ${status}). Tap Connect Smartsheet again. If it keeps happening, ask JK to check the Smartsheet app secret.`;
+  if (status === 500) return 'The Smartsheet relay is not set up yet (code 500) – ask JK.';
+  return `Smartsheet sign-in did not finish (code ${status}). Tap Connect Smartsheet again.`;
+}
+
 export class AuthError extends Error { constructor(message, status) { super(message); this.status = status; } }
 
 export function createSmartsheetAuth({ config, store, fetch: fetchFn = (...a) => globalThis.fetch(...a), win = globalThis.window, now = () => Date.now() }) {
@@ -28,9 +36,11 @@ export function createSmartsheetAuth({ config, store, fetch: fetchFn = (...a) =>
   }
 
   async function workerPost(path, body) {
-    const r = await fetchFn(`${worker()}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    let r;
+    try { r = await fetchFn(`${worker()}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+    catch { throw new AuthError(NO_RELAY, -1); }
     if (r.status === 403) throw new AuthError(DENIED, 403);
-    if (!r.ok) throw new AuthError('Smartsheet sign-in did not finish. Tap Connect Smartsheet again.', r.status);
+    if (!r.ok) throw new AuthError(relayMessage(r.status), r.status);
     return r.json();
   }
   async function saveTokens(t) { const v = { access_token: t.access_token, refresh_token: t.refresh_token, expiresAt: now() + (Number(t.expires_in) || 0) * 1000 }; await store.put('smartsheet', v); return v; }
@@ -68,6 +78,9 @@ export function createSmartsheetAuth({ config, store, fetch: fetchFn = (...a) =>
     return r;
   }
 
+  /** Is there a saved Smartsheet sign-in on this phone? (Does not call the network.) */
+  async function connected() { const t = await store.get('smartsheet'); return !!(t && t.access_token); }
+
   async function clear() { await store.delete('smartsheet'); await store.delete('smartsheet.state'); }
-  return { ready, authorizeUrl, connect, handleRedirect, getToken, api, clear };
+  return { ready, authorizeUrl, connect, handleRedirect, getToken, api, connected, clear };
 }

@@ -1,7 +1,7 @@
 // GNE MOP Intake service worker (hand-written). The build fills CACHE and PRECACHE.
 // - App shell + vendor files: precached, served cache-first (the app works with no signal).
 // - Google, Smartsheet and Worker calls: other origins, never intercepted (network-only).
-const CACHE = 'mop-shell-e90a77ef4a38b2a1';
+const CACHE = 'mop-shell-714d9f24645848d6';
 const PRECACHE = [
  "./",
  "./config.js",
