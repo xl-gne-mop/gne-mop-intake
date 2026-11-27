@@ -10,6 +10,8 @@ import { renderBackup } from './backupBox.js';
 import { route, wireEvents } from './events.js';
 import { wireAutocomplete } from './autocomplete.js';
 import { refreshWaiting, refreshNet } from './header.js';
+import { loadSyncInfo, refreshSyncPanel } from './syncPanel.js';
+import { wireTabs, warnLowSpace } from './tabs.js';
 import { rebuildSigs } from '../approve/signatures.js';
 import { initMarkup } from '../attach/markup.js';
 import { loadLib } from '../library/local.js';
@@ -75,7 +77,7 @@ export async function startApp() {
   // Rebuild 4 re-rendered on every shared-store change (soft()); here every local save does the same.
   // Field saves on the detail screen set S.quiet: they save without a redraw, so a tap that lands at that moment
   // is not lost on a replaced button.
-  S.hooks.saved = () => { rebuildSigs(); refreshWaiting(); askBackgroundSync(); if (S.view !== 'edit' && !S.quiet) render(); };
+  S.hooks.saved = () => { rebuildSigs(); refreshWaiting(); refreshSyncPanel(); askBackgroundSync(); if (S.view !== 'edit' && !S.quiet) render(); };
   await applyConfig();
   const me = await getIdentity();
   if (me) { S.uid = me.email; S.meName = me.name; S.canEdit = isEditor(me.email, (S.cfg && S.cfg.editors) || []); if (me.name) S.names[me.email] = me.name; }
@@ -88,7 +90,7 @@ export async function startApp() {
     S.dict.onState(({ state }) => { S.dictState = state; document.querySelectorAll('.mic').forEach(m => m.classList.toggle('live', state !== 'idle' && S.dictEl === m.parentElement.querySelector('textarea'))); });
   }
   await loadSuggestions();
-  await loadRequests(); await loadLib();
+  await loadRequests(); await loadLib(); await loadSyncInfo();
   S.ready = true;
   // Table cells get their column name for the stacked phone layout (r4:136).
   new MutationObserver(() => { for (const c of document.querySelectorAll('.stack td:not([data-l])')) { let i = 0, p = c; while ((p = p.previousElementSibling)) i += p.colSpan; c.dataset.l = c.closest('table').rows[0].cells[i]?.textContent || ''; } }).observe(document.getElementById('app'), { childList: true, subtree: true });
@@ -98,7 +100,7 @@ export async function startApp() {
   let session;
   const drainNow = createDrain({ getToken: () => session.google.getToken() });
   session = createSession({ hooks: {
-    drain: async a => { const r = await drainNow(a); await refreshWaiting(); return r; },
+    drain: async a => { const r = await drainNow(a); await refreshWaiting(); await refreshSyncPanel(); return r; },
     changed: () => { renderSyncBar(); if (S.view !== 'edit') render(); },
     loadConfig: getToken => applyConfig({ getToken }),
     persistWarning: show => show ? showBanner('persist', 'This phone may clear saved requests when space is low. Export a backup in Settings.', null, 'warn') : hideBanner('persist')
@@ -108,9 +110,12 @@ export async function startApp() {
   await session.handleRedirects();
   wireSyncBar(session); wireEvents(); wireAutocomplete(document.getElementById('app')); initMarkup(); startPilotClock(); await refreshWaiting(); route(); renderSyncBar();
   session.resume();
+  wireTabs({ render }); warnLowSpace();
   // Sync triggers: back online, back to the app. Background Sync is only a bonus where the browser has it.
   window.addEventListener('online', () => session.syncNow());
   onBackgroundSync(() => session.syncNow());
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') session.syncNow(); });
+  // iOS restores a Home Screen app from its back-forward cache without a new load: sync then too.
+  window.addEventListener('pageshow', e => { if (e.persisted) session.syncNow(); });
 }
 export { render, _render };

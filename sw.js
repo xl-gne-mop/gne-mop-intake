@@ -1,7 +1,7 @@
 // GNE MOP Intake service worker (hand-written). The build fills CACHE and PRECACHE.
 // - App shell + vendor files: precached, served cache-first (the app works with no signal).
 // - Google, Smartsheet and Worker calls: other origins, never intercepted (network-only).
-const CACHE = 'mop-shell-9148a843812b9377';
+const CACHE = 'mop-shell-32703b57fb5dc137';
 const PRECACHE = [
  "./",
  "./config.js",
@@ -37,6 +37,7 @@ const PRECACHE = [
  "./src/core/directory.js",
  "./src/core/record.js",
  "./src/core/save.js",
+ "./src/core/schema.js",
  "./src/core/state.js",
  "./src/dictation/guide.js",
  "./src/dictation/parse.js",
@@ -87,10 +88,12 @@ const PRECACHE = [
  "./src/store/attachments.js",
  "./src/store/backup.js",
  "./src/store/db.js",
+ "./src/store/errors.js",
  "./src/store/outbox.js",
  "./src/store/requests.js",
  "./src/store/settings.js",
  "./src/sync/engine.js",
+ "./src/sync/flags.js",
  "./src/sync/google-api.js",
  "./src/sync/library.js",
  "./src/sync/merge.js",
@@ -100,6 +103,7 @@ const PRECACHE = [
  "./src/sync/remote.js",
  "./src/sync/stageMap.js",
  "./src/sync/status.js",
+ "./src/sync/view.js",
  "./src/sync/wire.js",
  "./src/ui/app.css",
  "./src/ui/app.js",
@@ -121,7 +125,9 @@ const PRECACHE = [
  "./src/ui/screens.js",
  "./src/ui/settings.js",
  "./src/ui/stageForm.js",
+ "./src/ui/syncPanel.js",
  "./src/ui/syncbar.js",
+ "./src/ui/tabs.js",
  "./src/util/dates.js",
  "./src/util/download.js",
  "./src/util/holidays.js",

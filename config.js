@@ -15,5 +15,13 @@ window.MOP_CONFIG = {
   "SMARTSHEET_CLIENT_ID": "lxpdxgbh9pruofylh0y",
   "WORKER_URL": "https://gne-mop-intake-relay.xl-gne-mop.workers.dev",
   "PILOT_TRACKER_ID": "",
-  "PILOT_SHEET_ID": ""
+  "PILOT_SHEET_ID": "",
+  "FLAGS": {
+    "ssCheckBeforeAdd": true,
+    "trackerVerify": true,
+    "driveCheckBeforeUpload": true,
+    "driveResumable": true,
+    "retryClasses": true,
+    "syncPanel": true
+  }
 };

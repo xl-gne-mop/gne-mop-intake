@@ -13,6 +13,7 @@ import { tierOf } from '../rules/tier.js';
 import { flagsOf } from '../rules/dontKnow.js';
 import { closeItems } from '../rules/closeOut.js';
 import { fmtMin } from '../lib/library.js';
+import { syncPanel } from './syncPanel.js';
 
 /* ---------- detail ---------- */
 function vDetail(){const q=S.reqs[S.id];if(!q)return `<div class="empty">${S.ready?'This request was not found.':'Loading…'}</div>`;
@@ -21,7 +22,7 @@ function vDetail(){const q=S.reqs[S.id];if(!q)return `<div class="empty">${S.rea
  const pre=ld?ld.milestones.map((m,k)=>({...m,k})).concat(r.pre.filter(x=>x.desc.trim()).map((x,j)=>({step:x.desc,when:x.dur,date:null,k:8+j}))):[];
  return `<div class="bar"><a class="btn sm" href="#board">Board</a><span class="sp"></span>${q.status==='Draft'?`<a class="btn sm pri" href="#e-${esc(q.id)}">${sub?(q.meta.pmFix?'Continue PM check':'Continue revision '+q.rev):'Continue draft'}</a>`:!SIDE.includes(q.status)&&q.status!=='Closed'?`<button class="btn sm" data-a="revise">Start a revision</button>`:''}</div>
  <h1 class="u-d6f2af">${esc(r.title||'Untitled')} <span class="tier t${tierOf(r).t}">Tier ${tierOf(r).t}</span></h1><p class="sub u-fe7b49">${esc(r.bldg)} ${esc(mopLabel(q))} · ${esc(p?.label||'')}${q.meta.requestId?' · '+esc(q.meta.requestId):''}${sub&&q.status==='Draft'?` · showing submitted rev ${sub.rev}; rev ${q.rev} in progress`:''}</p>
- ${stageStrip(q)}${conflictCards(q.id)}${SIDE.includes(q.status)?`<p class="note">${esc(q.status)}</p>`:''}
+ ${stageStrip(q)}${conflictCards(q.id)}${syncPanel(q)}${SIDE.includes(q.status)?`<p class="note">${esc(q.status)}</p>`:''}
  <div class="bar u-905d8b">${SIDE.includes(q.status)?`<button class="btn" data-a="resume">Resume</button>`:q.status!=='Draft'?`<button class="btn" data-a="hold">Put on hold</button>`:''}${!['Cancelled','Closed'].includes(q.status)?`<button class="btn red" data-a="cancel">Cancel request</button>`:''}${sub&&S.canEdit?`<button class="btn" data-a="addlib">Add to library</button>`:''}</div>
  ${!SIDE.includes(q.status)?stageForm(q):''}
  ${!sub?'<div class="note">Not submitted yet. Outputs appear once the request is submitted.</div>':''}

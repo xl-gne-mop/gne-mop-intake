@@ -3,6 +3,10 @@
 import { openStore } from './db.js';
 import { makeOp, putOpInTx } from './outbox.js';
 import { newId } from '../util/ids.js';
+import { StaleError } from './errors.js';
+
+/** This window / tab. A save is refused when another tab saved the same request after this tab read it. */
+export const TAB_ID = newId('tab');
 
 export function newRequest(fields = {}) {
   const now = new Date().toISOString();
@@ -18,6 +22,12 @@ export async function saveRequest(q, { what = '', kind = 'request.save', payload
   q.updatedAt = new Date().toISOString();
   if (what) { q.history = [...(q.history || []), { at: q.updatedAt, what }].slice(-80); }
   const tx = db.transaction(['requests', 'outbox'], 'readwrite');
+  // Two tabs / windows on the same request: localRev counts saves; lastTab says which tab saved last. Saves from
+  // this tab never block each other (several copies of a request can be open on one page); only a newer save from
+  // another tab does, and then nothing is overwritten.
+  const cur = await tx.objectStore('requests').get(q.id);
+  if (cur && cur.lastTab && cur.lastTab !== TAB_ID && (cur.localRev || 0) > (q.localRev || 0)) { tx.abort(); await tx.done.catch(() => {}); throw new StaleError(); }
+  q.localRev = Math.max((cur && cur.localRev) || 0, q.localRev || 0) + 1; q.lastTab = TAB_ID;
   await tx.objectStore('requests').put(q);
   const op = await putOpInTx(tx, makeOp({ requestId: q.id, stage: q.stage || 0, rev: q.rev || 0, kind, payload }));
   await tx.done;

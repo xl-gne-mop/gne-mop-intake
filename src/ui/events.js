@@ -1,5 +1,6 @@
 // Events and routing.
 // Ported from reference/rebuild-4/index.html (r4:671-773).
+import { refreshSyncPanel } from './syncPanel.js';
 import { R, S, STEPS, STATUSES, SIDE, UTIL, GROUPS, SYSTEM_CODES, LOTO_CATS, CAT_MAP, CONTACT_ROLES, APPROVER_ROLES, ICON_MIC, $, esc, clone, uidGen, cfg, proj, safeUrl, pad3, mopLabel, toast, now, fS, fL, isoDay, pdDay, fromIso, fileUrl, D, render } from '../core/state.js';
 import { resolveConflict } from '../sync/wire.js';
 import { ensureX, newRecord, normReq, gapsFor } from '../core/record.js';
@@ -37,7 +38,7 @@ const q0 = () => S.view === 'detail' ? S.reqs[S.id] : null;
 
 /* ---------- events ---------- */
 let saveT;
-function saveDraft(){clearTimeout(saveT);const q=S.draft;if(!q||!S.dirty)return Promise.resolve(true);S.dirty=false;const n=$('#saveNote');if(n)n.textContent='Saved';if(!q.project&&!D().title)return Promise.resolve(true);return saveReq(q)}
+function saveDraft(){clearTimeout(saveT);const q=S.draft;if(!q||!S.dirty)return Promise.resolve(true);S.dirty=false;const n=$('#saveNote');if(n)n.textContent='Saved';if(!q.project&&!D().title)return Promise.resolve(true);return saveReq(q).then(ok=>{if(!ok){S.dirty=true;const m=$('#saveNote');if(m)m.textContent='Not saved'}return ok})}
 const later=()=>{S.dirty=true;const n=$('#saveNote');if(n)n.textContent='Saving…';clearTimeout(saveT);saveT=setTimeout(saveDraft,900)};
 S.hooks.saveDraft=saveDraft;S.hooks.later=later;
 function openEdit(q,step=0){S.draft=normReq(clone(q));S.step=step;S.view='edit';S.openPt=S.draft.record.loto.points.length?-1:0}
@@ -173,6 +174,7 @@ app.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)retu
  if(a==='fb'&&q){const c2=clone(q);c2.meta.pilot.fb[b.dataset.k]=b.dataset.v;saveReq(c2,'').then(render);return}
  if(a==='sugReview'&&q){const v=q.meta.review,t=[v.diff&&'Different from the MOP: '+v.diff,v.step&&'Step wrong / missing: '+v.step,v.time&&'Time off: '+v.time].filter(Boolean).join('\n');sendSug(t,q).then(ok=>{if(ok){const c2=clone(q);c2.meta.review.sent=true;saveReq(c2,'After-job review sent to JK').then(render)}});return}
  if(a==='xpilot'){saveFile(`MOP Intake pilot results ${isoDay(now())}.csv`,'\ufeff'+csv([PILOT_COLS,...pilotRows()]),'text/csv');return}
+ if(a==='syncRetry'){if(S.session){b.disabled=true;b.textContent='Trying…';S.session.syncNow({force:true}).finally(()=>refreshSyncPanel())}return}
  if(a==='copyf'){const el=$(`#${b.dataset.copy}`);navigator.clipboard.writeText(el?el.textContent:'').then(()=>toast('Copied.'),()=>toast('Select the text and copy it.'));return}
  if((a==='hold'||a==='cancel'||a==='resume')&&q){const c2=clone(q);if(a==='resume'){c2.status=statusFor(c2.stage||1,stageMeta(c2));c2.meta.hold=''}else{c2.status=a==='hold'?'On hold':'Cancelled';c2.meta.hold=c2.status}saveReq(c2,'Status: '+c2.status,{kind:'hold.change'}).then(render);render();return}
  if(a==='revise'&&q){const c2=clone(q);c2.rev=(q.sub?q.sub.rev:q.rev)+1;c2.status='Draft';saveReq(c2,`Revision ${c2.rev} started`).then(()=>go('#e-'+q.id));return}

@@ -272,3 +272,12 @@ details.rec { margin-top: 6px; } details.rec input { margin: 4px 0; }
 .toast{pointer-events:none}
 body:has(#mk:not([hidden])) .toast{bottom:calc(150px + var(--sab))}
 @media (orientation:landscape) and (max-height:500px){body:has(#mk:not([hidden])) .toast{bottom:calc(16px + var(--sab))}}
+
+/* Request page "Sent to" card (src/ui/syncPanel.js): one row per destination, 48 px, the status word first. */
+.syncp .dests{list-style:none;margin:0 0 8px;padding:0}
+.syncp .dests li{display:flex;gap:12px;align-items:center;min-height:48px;border-bottom:1px solid var(--line);padding:6px 0}
+.syncp .dests li:last-child{border-bottom:0}
+.syncp .dests .pill{min-width:84px;text-align:center;font-size:13px;padding:5px 8px}
+.syncp .dests b{display:block;color:var(--ink);font-size:15px}.syncp .dests small{color:var(--mut);font-size:13px}
+.syncp .btn{min-height:48px}
+.syncp details.legend summary{min-height:48px;display:flex;align-items:center;cursor:pointer;color:var(--navyi)}

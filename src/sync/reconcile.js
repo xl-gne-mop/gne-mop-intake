@@ -14,6 +14,8 @@ const stamp = d => { const h = d.getHours(); return `${pad(d.getMonth() + 1)}/${
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 import { gatePending, GATE_MESSAGE } from '../import/anymop/apply.js';
+import { flagOn } from './flags.js';
+import { unionAudit } from '../core/schema.js';
 export class SyncStop extends Error { constructor(message, kind) { super(message); this.kind = kind; } }
 /** Template v2 (11/26/26): a cached v1 MOP template stops the sync with a plain message (no retry loop). */
 async function buildMopOrStop(d, q) {
@@ -23,6 +25,13 @@ async function buildMopOrStop(d, q) {
 
 export function emptyState() {
   return { requestId: '', drive: { revs: {}, superseded: {}, att: {} }, trackerRow: 0, ss: { rows: {}, notes: [] }, stagesWritten: { tracker: 0, smartsheet: 0 }, revWritten: { tracker: -1, smartsheet: -1 }, base: { tracker: null, smartsheet: {}, requestJson: null }, conflicts: [], notes: [] };
+}
+
+/** Every attachment id the request sends to Drive Attachments/ (general files and LOTO photos + mark-ups; the
+ *  imported original goes to Source/ instead). */
+export function attachmentIds(q) {
+  const rec = q.sub.record;
+  return [...new Set([...(q.sub.files || []), ...(q.files || [])].filter(f => !f.source).map(f => f.id)), ...(rec.loto.points || []).flatMap(p => (p.att || []).flatMap(a => [a.id, a.mid].filter(Boolean)))];
 }
 
 /** Columns to write for stages a+1..b (STAGE_MAP), choosing the JLL / no-JLL variant. */
@@ -92,10 +101,18 @@ export async function reconcileRequest(q, d) {
   const folder = async (key, parent, name) => { if (!st.drive[key]) { const f = (await d.api.findChild(parent, name)) || (await d.api.createFolder(parent, name)); st.drive[key] = f.id; await save(); } return st.drive[key]; };
   const projectFolder = await folder('projectFolder', d.config.DRIVE_ROOT_FOLDER_ID, proj.label);
   const mopFolder = await folder('mopFolder', projectFolder, mopFolderName(q.mopNo, title));
+  // Check before upload (driveCheckBeforeUpload): every new file is tagged with this request (appProperties) and
+  // looked for first, so an upload whose answer was lost is found, not uploaded again. Files from before the tag
+  // existed are found by their exact name. The MOP is only built when it really has to be uploaded.
+  const check = flagOn(d.config, 'driveCheckBeforeUpload'), resumable = flagOn(d.config, 'driveResumable');
+  const putOnce = async (parent, name, make, mime, props, legacyMime = mime) => {
+    const tag = { mopReq: q.id, ...props };
+    if (check) { const found = (await d.api.findByProps(parent, tag)) || (await d.api.findChild(parent, name, legacyMime)); if (found) return found; }
+    return d.api.upload(parent, name, await make(), mime, check ? tag : null, { resumable });
+  };
   let newRev = false;
   if (!st.drive.revs[rev]) {
-    const b = await buildMopOrStop(d, q);
-    const f = await d.api.upload(mopFolder, mopFileName(q.mopNo, rev, title), b.bytes, DOCX);
+    const f = await putOnce(mopFolder, mopFileName(q.mopNo, rev, title), async () => (await buildMopOrStop(d, q)).bytes, DOCX, { mopKind: 'rev', mopRev: String(rev) });
     st.drive.revs[rev] = f.id; st.drive.current = f.id; newRev = true;
     st.notes.push(`DONE: MOP rev ${rev} file ${f.id} (${mopFileName(q.mopNo, rev, title)})`); await save();
   }
@@ -107,16 +124,16 @@ export async function reconcileRequest(q, d) {
   }
   for (const [key, at, suffix] of [['approved', 7, approvedSuffix], ['completed', 9, completedSuffix]]) {
     if (q.stage >= at && !st.drive[key]) {
-      const name = mopFileName(q.mopNo, rev, title, suffix(now)), b = await buildMopOrStop(d, q);
-      const f = await d.api.upload(mopFolder, name, b.bytes, DOCX); st.drive[key] = f.id;
+      const name = mopFileName(q.mopNo, rev, title, suffix(now));
+      const f = await putOnce(mopFolder, name, async () => (await buildMopOrStop(d, q)).bytes, DOCX, { mopKind: key, mopRev: String(rev) }); st.drive[key] = f.id;
       st.notes.push(`DONE: MOP ${key} copy file ${f.id} (${name})`); await save();
     }
   }
-  const attIds = [...new Set([...(q.sub.files || []), ...(q.files || [])].filter(f => !f.source).map(f => f.id)), /* the imported original goes to Source/ */ ...(rec.loto.points || []).flatMap(p => (p.att || []).flatMap(a => [a.id, a.mid].filter(Boolean)))];
+  const attIds = attachmentIds(q);
   for (const id of attIds) {
     if (st.drive.att[id]) continue; const blob = d.blob(id); if (!blob) continue;
     const attFolder = await folder('attachmentsFolder', mopFolder, 'Attachments');
-    const f = await d.api.upload(attFolder, `${id}.${/pdf/.test(blob.type) ? 'pdf' : 'jpg'}`, blob, blob.type || 'application/octet-stream');
+    const f = await putOnce(attFolder, `${id}.${/pdf/.test(blob.type) ? 'pdf' : 'jpg'}`, async () => blob, blob.type || 'application/octet-stream', { mopKind: 'att', mopAtt: id });
     st.drive.att[id] = f.id; await save();
   }
   // Import Any MOP: the original file in Source/ and "MOP-### rev N_import-audit.json" next to the MOP (old revs → Superseded)
@@ -137,7 +154,11 @@ export async function reconcileRequest(q, d) {
   if (cols.length) {
     if (!cols.includes('AG')) cols.push('AG');
     if (!trackerRows) await readTracker();
-    if (!st.trackerRow) {
+    if (flagOn(d.config, 'trackerVerify')) {
+      const idBefore = st.requestId;
+      await placeTrackerRow({ q, st, d, proj, save, trackerId, rows: () => trackerRows, reread: readTracker });
+      if (st.requestId !== idBefore) await syncRequestJson(q, st, d, mopFolder, save); // the new Request ID goes into request.json too
+    } else if (!st.trackerRow) {
       let i = trackerRows.findIndex(r => r[colIdx('AD')] === st.requestId);
       if (i < 0) { i = 0; while (i < LAST - FIRST + 1 && trackerRows[i] && (trackerRows[i][1] || trackerRows[i][colIdx('AD')])) i++; }
       if (i > LAST - FIRST) throw new SyncStop(`Tracker rows ${FIRST}–${LAST} are full – ask JK to add rows.`, 'trackerFull');
@@ -154,9 +175,55 @@ export async function reconcileRequest(q, d) {
   }
 
   // ---- 4. Smartsheet (through the Worker). Not connected yet -> waits; Drive and the tracker already went ahead.
-  if (!d.ss) return { ok: true, waitingFor: 'smartsheet', conflicts: st.conflicts };
+  if (!d.ss) { st.lastTriedAt = now.toISOString(); await save(); return { ok: true, waitingFor: 'smartsheet', conflicts: st.conflicts }; }
   await syncSmartsheet(q, st, d, { proj, jll, rev, mopLink, now, readSheet: () => ssSheet || readSheet(), save, newRev });
+  st.lastSyncedAt = st.lastTriedAt = now.toISOString(); await save(); // the request page shows this ("Sent … at")
   return { ok: true, waitingFor: null, conflicts: st.conflicts };
+}
+
+/**
+ * trackerVerify: make sure st.trackerRow is this request's row before anything is written to it.
+ * - A known row must still hold this Request ID in AD. If someone sorted or inserted rows, the request is found by
+ *   AD and followed to its new row. If it is nowhere in rows 6–93, nothing is written: a plain message instead.
+ * - A new row is claimed first (AD only), read back, and kept only if the claim held. Two phones that picked the
+ *   same empty row at once: the one whose claim was overwritten takes the next empty row. Nothing else is
+ *   written to a row until its claim held, so a lost race never overwrites another request's answers.
+ * - Two phones that gave the same Request ID to different requests (each saw the same highest number): the second
+ *   finds the first one's row (different MOP #) and takes the next Request ID.
+ */
+async function placeTrackerRow({ q, st, d, proj, save, trackerId, rows, reread }) {
+  const AD = colIdx('AD'), mine = r => r && r[AD] === st.requestId;
+  const confirmed = st.trackerConfirmed || st.revWritten.tracker >= 0; // rows written before this check existed count as confirmed
+  if (st.trackerRow && confirmed) {
+    if (mine(rows()[st.trackerRow - FIRST])) { if (!st.trackerConfirmed) { st.trackerConfirmed = true; await save(); } return; }
+    const i = rows().findIndex(mine);
+    if (i < 0) throw new SyncStop(`The tracker row for ${st.requestId} was moved or cleared (row ${st.trackerRow} now holds something else). Nothing was written. Ask JK to check the tracker.`, 'trackerMoved');
+    const from = st.trackerRow; st.trackerRow = FIRST + i;
+    for (const c of st.conflicts) if (c.where === `tracker row ${from}`) { c.where = `tracker row ${st.trackerRow}`; c.key = `${c.where}|${c.field}`; }
+    st.notes.push(`Tracker row for ${st.requestId} moved from ${from} to ${st.trackerRow}`); await save();
+    return;
+  }
+  for (let attempt = 0; attempt < 5; attempt++) {
+    let i = rows().findIndex(mine);
+    if (i >= 0) {
+      const r = rows()[i];
+      if (r[1] && !String(r[1]).startsWith(mop3(q.mopNo))) { // another request already uses this Request ID
+        const old = st.requestId;
+        st.requestId = nextRequestId(proj.id, [...rows().map(x => x[AD]), old]);
+        q.meta.requestId = st.requestId; st.notes.push(`Request ID changed to ${st.requestId} – ${old} was taken`);
+        await d.saveLocal(q); await save(); continue;
+      }
+      st.trackerRow = FIRST + i; st.trackerConfirmed = true; await save(); return; // our claim (or an earlier write whose answer was lost)
+    }
+    i = 0; while (i < LAST - FIRST + 1 && rows()[i] && (rows()[i][1] || rows()[i][AD])) i++;
+    if (i > LAST - FIRST) throw new SyncStop(`Tracker rows ${FIRST}–${LAST} are full – ask JK to add rows.`, 'trackerFull');
+    st.trackerRow = FIRST + i; st.trackerConfirmed = false; await save();
+    await d.api.valuesBatchUpdate(trackerId, [{ range: `'${TAB}'!AD${st.trackerRow}`, values: [[st.requestId]] }]);
+    await reread();
+    if (mine(rows()[st.trackerRow - FIRST])) { st.trackerConfirmed = true; await save(); return; }
+    st.trackerRow = 0; await save(); // another phone took that row first: try the next empty one
+  }
+  throw new SyncStop('Could not get a free tracker row (other phones were taking rows at the same time). It will try again.', 'trackerBusy');
 }
 
 // A field the editor chose to "keep theirs" for: leave it alone while the phone still holds the same value.
@@ -188,10 +255,13 @@ async function syncRequestJson(q, st, d, mopFolder, save) {
   if (st.drive.requestJsonTime && metaNow.modifiedTime !== st.drive.requestJsonTime) {
     const remote = await d.api.getMedia(st.drive.requestJson), rr = (typeof remote === 'string' ? JSON.parse(remote) : remote).request || {};
     const L = flatReq(q), B = st.base.requestJson ? flatReq(st.base.requestJson) : null, Rm = flatReq(rr), where = 'request (Drive)';
-    const m = merge3([...new Set([...Object.keys(L), ...Object.keys(Rm)])].filter(k => !keptTheirs(st, where, k, L[k])), L, B, Rm, 'request.json');
+    // meta.audit is append-only on every phone: both sides' lines are kept (union), never a conflict card.
+    const m = merge3([...new Set([...Object.keys(L), ...Object.keys(Rm)])].filter(k => k !== 'meta.audit' && !keptTheirs(st, where, k, L[k])), L, B, Rm, 'request.json');
     for (const [k, v] of Object.entries(m.take)) setFlat(q, k, v);
     addConflicts(st, m.conflicts, where);
-    if (Object.keys(m.take).length) await d.saveLocal(q);
+    const audit = unionAudit((q.meta || {}).audit, (rr.meta || {}).audit), grew = audit.length !== ((q.meta || {}).audit || []).length;
+    if (grew) q.meta.audit = audit;
+    if (Object.keys(m.take).length || grew) await d.saveLocal(q);
   }
   const merged = outText();
   if (merged === st.drive.requestJsonText) { st.drive.requestJsonTime = metaNow.modifiedTime; await save(); return; }
@@ -207,6 +277,14 @@ export function ssJob(sheet, proj) {
   const label = String(proj.job || proj.label || '').trim(), sfx = (/\.(\d+)/.exec(String(proj.id || '')) || [])[1];
   const byNo = sfx && opts.find(o => { const m = /^\s*(?:\d+)?\.([\d/]+)/.exec(o); return m && m[1].split('/').some(n => n === sfx); });
   return byNo || opts.find(o => o.trim().toLowerCase() === label.toLowerCase()) || '';
+}
+
+/** This request's Smartsheet rows (same Request ID and MOP #), in sheet order. */
+export function rowsFor(sheet, requestId, mop) {
+  const col = t => ((sheet.columns || []).find(c => c.title === t) || {}).id;
+  const rid = col('Request ID'), mno = col('MOP #'); if (!rid || !requestId) return [];
+  const v = (row, id) => (row.cells.find(c => c.columnId === id) || {}).value;
+  return (sheet.rows || []).filter(r => String(v(r, rid) ?? '') === requestId && (!mno || String(v(r, mno) ?? '') === String(mop))).sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
 }
 
 async function syncSmartsheet(q, st, d, { proj, jll, rev, mopLink, now, readSheet, save, newRev }) {
@@ -228,9 +306,14 @@ async function syncSmartsheet(q, st, d, { proj, jll, rev, mopLink, now, readShee
   if (!ids.length) {
     const rows = lv.map(v => ({ toBottom: true, cells: Object.entries({ ...intake(v), ...common, 'JLL LOTO #': lotoNo, 'App Notes': appNotes('') }).map(([t, v2]) => cell(t, v2))
       .filter(Boolean).filter(c => c.value !== undefined && c.value !== '') }));
-    const r = await d.ss(`/sheets/${d.sheetId}/rows`, { method: 'POST', body: JSON.stringify(rows) });
-    const out = (await r.json()).result || [];
-    out.forEach((row, i) => { st.ss.rows[i] = row.id; st.base.smartsheet[row.id] = Object.fromEntries(rows[i].cells.map(c => [c.columnId, c.value])); });
+    // Check before add: an earlier add may have gone through while its answer was lost (weak signal). Rows that
+    // already carry this Request ID and MOP # are this request's rows: keep them instead of adding them again.
+    const found = flagOn(d.config, 'ssCheckBeforeAdd') ? rowsFor(sheet, st.requestId, common['MOP #']) : [];
+    found.forEach((row, i) => { st.ss.rows[i] = row.id; st.base.smartsheet[row.id] = Object.fromEntries((row.cells || []).map(c => [c.columnId, c.value])); });
+    const missing = rows.slice(found.length);
+    if (found.length) st.notes.push(`Smartsheet rows already there for ${st.requestId} (${found.length}) – kept, not added again`);
+    const out = missing.length ? ((await (await d.ss(`/sheets/${d.sheetId}/rows`, { method: 'POST', body: JSON.stringify(missing) })).json()).result || []) : [];
+    out.forEach((row, j) => { const i = found.length + j; st.ss.rows[i] = row.id; st.base.smartsheet[row.id] = Object.fromEntries(missing[j].cells.map(c => [c.columnId, c.value])); });
     st.ss.notes.push(...pendingNotes); st.stagesWritten.smartsheet = q.stage; st.revWritten.smartsheet = rev; await save();
     return;
   }

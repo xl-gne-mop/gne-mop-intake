@@ -8,6 +8,7 @@ import { ruleGaps, hasStep } from '../rules/failureModes.js';
 import { permitsFor, reviewDue } from '../rules/permits.js';
 import { ensureRv, reviewGaps, reviewNotes, offSiteHot } from '../rules/review.js';
 import { gatePending, GATE_MESSAGE } from '../import/anymop/apply.js';
+import { upgradeRequest } from './schema.js';
 
 function ensureX(r){r.x=Object.assign({util:{level:'',items:[],other:'',notes:''},qa:'',gmpNotes:'',isoBy:'',rts:'',isoBy2:'',backfeed:'',backfeedSrc:'',cold:'',eyewash:'',dp:'',alarms:'',flags:{},auto:{},autoEd:{},scopeOk:false},r.x||{});r.x.util=Object.assign({level:'',items:[],other:'',notes:''},r.x.util||{});
  ['flags','auto','autoEd'].forEach(k=>{if(!r.x[k]||typeof r.x[k]!=='object'||Array.isArray(r.x[k]))r.x[k]={}});if(Array.isArray(r.x.alarms))r.x.alarms=r.x.alarms.join('\n');
@@ -15,7 +16,7 @@ function ensureX(r){r.x=Object.assign({util:{level:'',items:[],other:'',notes:''
 function newRecord(){return ensureX(R.blankRecord())}
 function normReq(d){const q=Object.assign({id:uidGen(),project:'',mopNo:0,rev:0,status:'Draft',files:[],meta:{},sub:null,history:[],createdBy:'',createdAt:'',updatedAt:''},d||{});
  q.record=ensureX(R.parseRecord(q.record||{}));q.meta=Object.assign({preDone:[],jllRef:{assistWO:'',lotoWO:'',lotoNo:''},campus:false,onedrive:{url:'',at:'',by:''},peer:{name:'',at:''},close:{},review:{},pmFix:false},q.meta||{});q.meta.pilot=Object.assign({activeSec:0,dk:0,edits:0,subAt:'',fb:{}},q.meta.pilot||{});['close','review'].forEach(k=>{if(!q.meta[k]||typeof q.meta[k]!=='object')q.meta[k]={}});
- if(q.sub)q.sub.record=ensureX(R.parseRecord(q.sub.record));if(!Array.isArray(q.files))q.files=[];if(!Array.isArray(q.history))q.history=[];return q}
+ if(q.sub)q.sub.record=ensureX(R.parseRecord(q.sub.record));if(!Array.isArray(q.files))q.files=[];if(!Array.isArray(q.history))q.history=[];return upgradeRequest(q)}
 const ctxFor=(q,r)=>({project:proj(q.project),settings:cfg().rules,now:now(),attachmentCount:q.files.length});
 function baseGaps(q){const r=q.record;R.normalize(r);const g=R.validate(r,ctxFor(q,r));
  const u=r.x.util,has=u.items.length||u.other.trim();

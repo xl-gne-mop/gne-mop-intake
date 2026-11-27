@@ -32,12 +32,12 @@ async function saveLocal(q) {
 }
 
 export function createDrain({ getToken, fetch: fetchFn } = {}) {
-  return async function run({ smartsheet }) {
+  return async function run({ smartsheet, force = false }) {
     const api = createGoogleApi({ getToken, fetch: fetchFn });
     const ss = smartsheet && smartsheet.ready() ? (path, init) => smartsheet.api(path, init) : null;
     const config = C();
     const r = await drain({
-      outbox, state: stateStore, api, ss, ssReady: () => !!ss, config, cfg: cfg(), pilot: !!S.pilotOn,
+      outbox, state: stateStore, api, ss, ssReady: () => !!ss, config, cfg: cfg(), pilot: !!S.pilotOn, force,
       getReq: async id => { const db = await openStore(); return db.get('requests', id); },
       saveLocal, blob: id => S.blobs[id] || null, now: () => R.siteNow(),
       canEdit: async id => { const m = await api.getMeta(id, 'capabilities(canEdit)'); return !!(m.capabilities && m.capabilities.canEdit); },
