@@ -1,9 +1,10 @@
 // Type-ahead under the form fields (11/27/26). Shows up to 5 big buttons under the field that has focus:
 // values used before in that field, or people from the directory. Tapping one fills the field; tapping a
-// person's name also fills their title, company, phone (and email for the requester). Works offline: the
+// person's name also fills their title, company, phone (and email for the requester). Typing a known
+// person's full name fills a blank Phone box too; the Phone box finds numbers by digits or by name. Works offline: the
 // suggestions come only from what is on the phone (src/core/directory.js).
 import { S, D, cfg, esc, later } from '../core/state.js';
-import { buildDirectory, suggest, groupOf, NO_SUGGEST } from '../core/directory.js';
+import { buildDirectory, suggest, groupOf, phoneForName, NO_SUGGEST } from '../core/directory.js';
 
 const TYPES = new Set(['text', 'tel', 'email', 'search']);
 let dir = null, dirFor = '', dirCfg = null, box = null, cur = null, hideT = 0, list = [], filling = false;
@@ -57,6 +58,13 @@ function pick(i) {
 export function wireAutocomplete(app) {
   app.addEventListener('focusin', e => { const t = e.target; if (!usable(t)) return; clearTimeout(hideT); if (cur !== t) hide(); cur = t; t.setAttribute('autocomplete', 'off'); show(t); });
   app.addEventListener('input', e => { if (!filling && e.target === cur && usable(cur)) show(cur); });
+  // A known person's full name typed (no tap) fills the Phone box next to it, only while it is blank.
+  app.addEventListener('change', e => {
+    const t = e.target; if (filling || !usable(t)) return;
+    const g = groupOf(t.dataset.k); if (!g || !g.base || g.field !== 'name' || !g.fields.includes('phone')) return;
+    const at = `${g.base}.phone`, ph = phoneForName(directory(), t.value);
+    if (ph && !String(get(D(), at) ?? '').trim()) { filling = true; try { setField(at, ph); } finally { filling = false; } }
+  });
   // Hide a moment after the field loses focus, so a tap that lands on something below still works.
   app.addEventListener('focusout', e => { if (e.target === cur) { clearTimeout(hideT); hideT = setTimeout(() => { if (document.activeElement !== cur) { hide(); cur = null; } }, 250); } });
   app.addEventListener('keydown', e => { if (e.key === 'Escape' && box) { hide(); } });

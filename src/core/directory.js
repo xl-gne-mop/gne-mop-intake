@@ -137,8 +137,18 @@ export function suggest(dir, path, q, rec, max = 5) {
     const p = person(other('name'));
     if (p && p.company && score(p.company, query)) push({ label: p.company, sub: 'Works for', value: p.company });
     for (const c of rank(dir.companies, query)) push({ label: c.v, value: c.v });
-  } else if (g && (g.field === 'title' || g.field === 'phone' || g.field === 'email')) {
-    const f = g.field, p = person(other('name')), co = other('company'), phone = f === 'phone';
+  } else if (g && g.field === 'phone') {
+    // Phone: type digits (matches the number) or letters (matches the person's name or company). The named
+    // person's number comes first; picking a number also fills that person's name, title, company and email
+    // where they are still blank (never over something already typed).
+    const byName = /[a-z]/i.test(query), p = person(other('name')), co = low(other('company'));
+    const hit = x => (!query ? 1 : byName ? Math.max(score(x.name, query), score(x.company, query) && 0.5) : score(x.phone, query, true));
+    const blanks = x => { const f = {}; for (const k of g.fields) if (k !== 'phone' && x[k] && !other(k)) f[k] = x[k]; return Object.keys(f).length ? f : undefined; };
+    const list = dir.people.filter(x => x.phone).map(x => ({ x, s: hit(x) })).filter(o => o.s > 0)
+      .sort((a, b) => (b.x === p) - (a.x === p) || b.s - a.s || (co && (low(b.x.company) === co) - (low(a.x.company) === co)) || (b.x.here - a.x.here) || b.x.n - a.x.n || a.x.name.localeCompare(b.x.name));
+    for (const { x } of list) push({ label: x.phone, sub: [x.name, x.company].filter(Boolean).join(' · '), value: x.phone, fill: blanks(x) });
+  } else if (g && (g.field === 'title' || g.field === 'email')) {
+    const f = g.field, p = person(other('name')), co = other('company'), phone = false;
     if (p && p[f] && score(p[f], query, phone)) push({ label: p[f], sub: p.name, value: p[f] });
     const pool = dir.people.filter(x => x[f]), byCo = co ? pool.filter(x => low(x.company) === low(co)) : [];
     const vals = new Map();
@@ -148,4 +158,10 @@ export function suggest(dir, path, q, rec, max = 5) {
   // Field history (person fields already hold everything typed before, so they skip it).
   if (!g) for (const h of rank(dir.hist[fieldKey(path)] || [], query, /phone$/.test(path), x => x.v, x => -x.last)) push({ label: h.v, value: h.v });
   return out.slice(0, max);
+}
+
+/** The phone to put in a blank Phone box once a known person's full name is typed (no tap needed). */
+export function phoneForName(dir, name) {
+  const p = dir && norm(name) ? dir.people.find(x => low(x.name) === low(name)) : null;
+  return (p && p.phone) || '';
 }
