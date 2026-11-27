@@ -9,6 +9,8 @@
 //  - Not applicable = struck through, not deleted (as on MOP-001).
 // The v1 filler (sri.js fillMop / fillMopPlus) is untouched; the v1 template is refused by buildMop.
 
+import { plannedWindow } from './package.js';
+
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
 const XMLNS_XML = 'http://www.w3.org/XML/1998/namespace';
@@ -19,7 +21,8 @@ export const UTIL_ITEMS = ['DI / RO Water', 'Steam / Condensate', 'Domestic Wate
 export const BASE_TERMS = ['XL Construction', 'XL', 'Genentech', 'GNE', 'JLL', 'Siemens FLS', 'Siemens', 'Subcontractor', 'Sub', 'User Team Lead', 'Lab Manager', 'Lab Mgr', 'PIC'];
 const SECTION = /^(\d{1,2})\. (Cont\. )?(Impact Notification|Impact Description|Personnel Contact|Safety Requirements|Required Tools|Required Personnel|Detailed Step-by-Step|Go \/ No-Go|Back-Out|MOP Author|Owner|Qualified)/;
 
-/** 2 for the v2 template (3 body tables, the isolation-verified row), 1 otherwise. Works on the raw XML string. */
+/** 2 for the v2 template (3+ body tables, the isolation-verified row), 1 otherwise. Works on the raw XML string.
+ *  Round 3 (11/26/26, 10 tables) is still 2: every round-3 row is optional, so the app fills either. */
 export function templateVersionOf(xml) {
   const s = String(xml || '');
   const tables = (s.match(/<w:tbl>/g) || []).length;
@@ -200,6 +203,9 @@ export function mapTemplate(doc) {
   tables.forEach((tbl, ti) => kids(tbl, 'tr').forEach(tr => {
     const cs = cells(tr), t0 = cs.length ? cellText(cs[0]) : '', m = cs.length === 1 && SECTION.exec(t0);
     if (m) { key = m[1] + (m[2] ? 'c' : ''); sec[key] = { header: tr, rows: [], table: ti }; return; }
+    // round 3 (JK 11/26/26): the close-out block after section 11 and the change log page have their own titles
+    const extra = cs.length === 1 && (/^Close-out Verification/.test(t0) ? 'close' : /^MOP Change Log/.test(t0) ? 'log' : '');
+    if (extra) { key = extra; sec[key] = { header: tr, rows: [], table: ti }; return; }
     (sec[key].rows).push(tr);
   }));
   for (const k of ['1', '2', '3', '4', '5', '6', '7', '8', '8c', '9', '10', '11', '12', '13', '14', '14c']) if (!sec[k]) fail(`section ${k.replace('c', '. Cont.')}`);
@@ -221,8 +227,11 @@ function ensureRows(rows, want) { const out = rows.slice(); while (out.length < 
 
 // ---------- the fill ----------
 /**
- * ctx  = { record, project, mopNo, rev, submitted, revisedOn, attachments, companyNames? }
+ * ctx  = { record, project, mopNo, rev, submitted, revisedOn, attachments, companyNames?,
+ *          emergency? [{name,title,company,phone}], changeLog? [{rev,date,by,change,approvedBy}] }   (round 3)
  * plus = { approved, x, preDone[10], esign:{approvers[6], author, supervisor} } (as fillMopPlus)
+ *        round 3: x.tier (1–3), x.lib {name,ver}, x.permits {impairNo,fireWatch,monitoring,hotWorkNo,other[]},
+ *        close { loto, alarms, watch, hot, users, qa: {by,time} }
  * dom  = { DOMParser, XMLSerializer }
  * R    = SRI helpers (startOf, jllNeeded); defaults to globalThis.SRI.
  */
@@ -258,6 +267,9 @@ export function fillMopV2(xml, ctx, plus, dom, R = globalThis.SRI) {
   needLabel(paras(r3[0])[0], 'Work Area(s):', `${rec.bldg} ${rec.areas.replace(/\n/g, '; ')}`.trim());
   needLabel(paras(r3[1])[0], 'MOP Execute Date:', fLong(start));
   needLabel(paras(cells(needRow(H, 'Work Scope:'))[0])[0], 'Work Scope:', `${rec.scope.trim()} (Origin: ${rec.origin}.)`, { style: STYLE.scope });
+  { const tr = rowStarting(H, 'Risk Tier:'); // round 3 (JK #7)
+    if (tr) { const c = cells(tr); boxes(c[0]).forEach(b => { const n = +((/Tier (\d)/.exec(b.label) || [])[1]); tick(b.sdt, Number(x.tier) === n); });
+      const lib = x.lib || {}; if (c[1]) afterLabel(paras(c[1])[0], 'Work Type:', lib.name ? `${lib.name}${lib.ver ? ` (library v${lib.ver})` : ''}` : ''); } }
 
   // --- 1. Impact Notification: system groups, Utility Systems, GMP / QA ---
   const S1 = sec['1'].rows;
@@ -297,6 +309,13 @@ export function fillMopV2(xml, ctx, plus, dom, R = globalThis.SRI) {
   if (S3.length < 10) fail('contact rows (10)');
   for (let i = 0; i < 8; i++) { const v = (prj.contacts || [])[i]; cells(S3[i]).slice(0, 4).forEach((tc, k) => writeCell(tc, v ? [v.name, v.title, v.company, v.phone][k] || '' : '')); }
   for (let i = 0; i < 2; i++) { const v = (rec.subs || [])[i]; const vals = v ? [v.name, v.title, v.company, v.phone] : ['', '', 'Subcontractor', '']; cells(S3[8 + i]).slice(0, 4).forEach((tc, k) => writeCell(tc, vals[k] || '')); }
+  { const em = (ctx.emergency || []).filter(e => e && e.phone); // phone known → print (JK 11/26/26)
+    if (em.length) {
+      const headRow = sec['3'].rows.find(tr => cellText(cells(tr)[0] || tr) === 'Name') || fail('"Name" heading');
+      const h = headRow.cloneNode(true); after(S3[9], h); writeCell(cells(h)[0], 'Emergency / On-Call', { style: null });
+      let ref = h;
+      for (const e of em) { const n = S3[9].cloneNode(true); after(ref, n); ref = n; cells(n).slice(0, 4).forEach((tc, k) => writeCell(tc, [e.name, e.title, e.company, e.phone][k] || '')); }
+    } }
 
   // --- 4. Safety requirements ---
   const S4 = sec['4'].rows;
@@ -338,6 +357,17 @@ export function fillMopV2(xml, ctx, plus, dom, R = globalThis.SRI) {
     needLabel(paras(c[0])[0], 'Print Name:', lo ? by : 'N/A');
     needLabel(paras(c[1])[0], 'Second check / Time:', lo ? by2 : '');
     if (!lo) strikeAll(ir); }
+  { const r1 = rowStarting(S7, 'FLS Impairment #'), r2 = rowStarting(S7, 'Hot Work Permit #:'); // round 3 (JK #4)
+    const pm = x.permits || {}, hot = rec.sup.hot === 'Yes', watch = impair || hot || rec.sup.watch === 'Yes'; // fire watch: every FLS impairment (decision #13)
+    if (r1) { const c = cells(r1);
+      needLabel(paras(c[0])[0], 'FLS Impairment # (Siemens FLS):', impair ? String(pm.impairNo || '').trim() : '');
+      needLabel(paras(c[1])[0], 'Fire Watch Assigned:', watch ? String(pm.fireWatch || '').trim() : '');
+      needLabel(paras(c[2])[0], 'Monitoring Co. Notified:', impair ? String(pm.monitoring || '').trim() : '');
+      if (!impair) { strikeAll(c[0]); strikeAll(c[2]); } if (!watch) strikeAll(c[1]); }
+    if (r2) { const c = cells(r2), other = (Array.isArray(pm.other) ? pm.other : lines(pm.other)).filter(Boolean).join('; ');
+      needLabel(paras(c[0])[0], 'Hot Work Permit #:', hot ? String(pm.hotWorkNo || '').trim() : '');
+      needLabel(paras(c[1])[0], 'Other Permits:', other);
+      if (!hot) strikeAll(c[0]); } }
 
   // --- 8. During steps (10 on page 2, the rest on the continuation sheet) ---
   const steps = rec.steps.filter(s => s.desc.trim());
@@ -345,6 +375,9 @@ export function fillMopV2(xml, ctx, plus, dom, R = globalThis.SRI) {
   if (dur.length < 10) fail('during steps 1–10');
   if (steps.length > 10 + cont.length) cont = ensureRows(cont, steps.length - 10);
   [...dur.slice(0, 10), ...cont].forEach((tr, i) => { const c = cells(tr), s = steps[i]; if (i >= 10 + 34) writeCell(c[0], String(i + 1)); writeCell(c[1], s ? s.desc.trim() : '', rich); writeCell(c[2], s ? s.dur.trim() : ''); });
+  { const tr = rowStarting(sec['8'].rows, 'Planned Start:'); // round 3 (JK #3): start + the step durations
+    if (tr) { const c = cells(tr), w = plannedWindow(rec, steps, start);
+      needLabel(paras(c[0])[0], 'Planned Start:', w.start); needLabel(paras(c[1])[0], 'Planned End:', w.end); needLabel(paras(c[2])[0], 'Total Duration:', w.total); } }
 
   // --- 9. Go / No-Go, 10. Back-out ---
   const gn = lines(rec.gonogo), go = numbered(sec['9'].rows);
@@ -365,6 +398,20 @@ export function fillMopV2(xml, ctx, plus, dom, R = globalThis.SRI) {
   { const rts = lines(x.rts); let rows = af.slice(4);
     while (rows.length < rts.length) { const n = cloneRowAfter(rows[rows.length - 1]); rows.push(n); }
     rows.forEach((tr, i) => { const c = cells(tr); writeCell(c[0], String(5 + i)); writeCell(c[1], rts[i] ? `Return to service: ${rts[i]}` : '', rich); }); }
+
+  // --- close-out verification (round 3, JK #5): by / time per item, struck when it doesn't apply ---
+  if (sec.close) {
+    const cl = plus.close || {}, hot = rec.sup.hot === 'Yes', watch = impair || hot || rec.sup.watch === 'Yes', alarms = impair || lines(x.alarms).length > 0;
+    const items = [['LOTO removed by:', cl.loto, lo], ['Alarms restored & impairment closed by:', cl.alarms, alarms], ['Fire watch ended by:', cl.watch, watch],
+      ['Hot work permit closed by:', cl.hot, hot], ['Users confirm back in service:', cl.users, true], ['QA release (cGMP) by:', cl.qa, rec.sup.cgmp === 'Yes']];
+    for (const [label, v, needed] of items) {
+      const tr = sec.close.rows.find(r => cells(r).some(c => cellText(c).startsWith(label))); if (!tr) continue;
+      const c = cells(tr), k = c.findIndex(x => cellText(x).startsWith(label));
+      needLabel(paras(c[k])[0], label, needed && v ? v.by || '' : '');
+      if (c[k + 1]) needLabel(paras(c[k + 1])[0], 'Time:', needed && v ? v.time || '' : '');
+      if (!needed) { strikeAll(c[k]); if (c[k + 1]) strikeAll(c[k + 1]); }
+    }
+  }
 
   // --- 12. Author / supervisor ---
   const S12 = sec['12'].rows;
@@ -394,9 +441,20 @@ export function fillMopV2(xml, ctx, plus, dom, R = globalThis.SRI) {
 
   // --- continuation sheet: dropped when ≤10 during steps and ≤3 workers ---
   if (steps.length <= 10 && wk.length <= 3) {
-    const t2 = tables[2]; let prev = t2.previousSibling; while (prev && prev.nodeType !== 1) prev = prev.previousSibling;
-    if (prev && prev.localName === 'p' && all(prev, W, 'br').some(b => b.getAttributeNS(W, 'type') === 'page') && !textOf(prev).trim()) remove(prev);
-    remove(t2);
+    const prevEl = n => { let p = n.previousSibling; while (p && p.nodeType !== 1) p = p.previousSibling; return p; };
+    const contTables = [...new Set([tables[sec['14c'].table], tables[sec['8c'].table]])].filter(t => t !== tables[0]);
+    for (const t of contTables) {
+      const prev = prevEl(t); // the page break (round 2 and 3) or the hidden separator paragraph (round 3)
+      if (prev && prev.localName === 'p' && !textOf(prev).trim() && !all(prev, W, 'sectPr').length) remove(prev);
+      remove(t);
+    }
+  }
+
+  // --- change log (round 3, JK #6): last section, never counted in "Page X of Y" ---
+  if (sec.log) {
+    const lr = tableRowsAfter(sec.log.rows, 'Rev'), log = (ctx.changeLog || []).filter(e => e && (e.change || e.rev !== undefined));
+    if (!log.length) log.push({ rev: 0, date: fLong(ctx.submitted), by: (rec.author || '').trim() || rec.req.name, change: 'Initial issue', approvedBy: '' });
+    ensureRows(lr, log.length).forEach((tr, i) => { const e = log[i]; if (!e) return; cells(tr).slice(0, 5).forEach((tc, k) => writeCell(tc, [String(e.rev ?? ''), e.date || '', e.by || '', e.change || '', e.approvedBy || ''][k], k === 3 ? rich : {})); });
   }
 
   // --- DRAFT banner ---
@@ -408,7 +466,8 @@ export function fillMopV2(xml, ctx, plus, dom, R = globalThis.SRI) {
   }
 
   // --- attachment pages (same as v1) ---
-  const sectPr = kids(body, 'sectPr')[0];
+  const secEnd = all(body, W, 'sectPr').find(sp => sp.parentNode && sp.parentNode.localName === 'pPr'); // round 3: end of the MOP section
+  const sectPr = secEnd ? secEnd.parentNode.parentNode : kids(body, 'sectPr')[0];
   const NS = `xmlns:w="${W}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"`;
   const put = s => body.insertBefore(doc.importNode(new dom.DOMParser().parseFromString(s, 'application/xml').documentElement, true), sectPr);
   (ctx.attachments || []).forEach((a, i) => {

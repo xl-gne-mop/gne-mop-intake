@@ -6,6 +6,9 @@ import { tierOf, TIER_NAME } from '../rules/tier.js';
 import { sigOf } from '../approve/signatures.js';
 import { reviewPrint, mergeRefs } from '../rules/review.js';
 import { fillMopV2, templateVersionOf } from '../mop/fillMopV2.js';
+import { estimatePages, footerWithPages, appWithPages, headerWithMop, recordXml, RECORD_PART } from '../mop/package.js';
+import { emergencyLines } from '../rules/emergency.js';
+import { allPermits } from '../rules/permits.js';
 import { gatePending, GATE_MESSAGE } from '../import/anymop/apply.js';
 
 /* JK decision P1: the Rebuild 5 print additions are on unless lists.json PrintAdditions = No, which prints
@@ -53,10 +56,32 @@ async function buildMop(q){const sub=q.sub,rec=outRecord(q),p=proj(q.project);if
   preDone:Array.from({length:10},(_,k)=>q.meta.preDone[k]?fL(pdDay(q.meta.preDone[k])):''),
   esign:{approvers:p.approvers.map((a,k)=>{const s=sg('a'+k);return s?{date:fL(fromIso(s.at)),name:names(s.uid)}:null}),author:sg('author')?fL(fromIso(sg('author').at)):null,supervisor:sg('super')?{name:names(sg('super').uid),date:fL(fromIso(sg('super').at))}:null}};
  const revisedOn=sub.rev?fromIso(sub.at):null;
- parts['word/document.xml']=R.strToU8(fillMopV2(xml,{record:rec,project:p,mopNo:q.mopNo,rev:sub.rev,submitted:fromIso(q.firstAt||sub.at),revisedOn,attachments:atts,companyNames:cfg().companyNames||[]},plus,dom,R));
+ // Template v2 round 3 (JK 11/26/26): tier, work type, permits, close-out, change log, emergency / on-call lines
+ const tier=tierOf(rec).t;plus.x={...plus.x,tier,lib:rec.x.lib||null,permits:{...(rec.x.permits||{}),other:mopOtherPermits(rec)}};plus.close=closeOutFor(q);
+ const filled=fillMopV2(xml,{record:rec,project:p,mopNo:q.mopNo,rev:sub.rev,submitted:fromIso(q.firstAt||sub.at),revisedOn,attachments:atts,companyNames:cfg().companyNames||[],
+  emergency:emergencyLines(rec,cfg(),tier),changeLog:changeLogFor(q,rec)},plus,dom,R);
+ parts['word/document.xml']=R.strToU8(filled);
+ { // package parts (round 3 template; each one optional): running header, page count, hidden copy of the record
+  const txt=k=>parts[k]?R.strFromU8(parts[k]):null,put=(k,v)=>{if(v!=null)parts[k]=R.strToU8(v)};
+  const hdr={mopNo:q.mopNo,rev:sub.rev,title:rec.title,start:R.startOf(rec)};['word/header1.xml','word/header3.xml'].forEach(k=>{if(parts[k])put(k,headerWithMop(txt(k),hdr))});
+  const pages=estimatePages(filled,dom);['word/footer1.xml','word/footer2.xml'].forEach(k=>{if(parts[k])put(k,footerWithPages(txt(k),pages))});
+  if(parts['docProps/app.xml'])put('docProps/app.xml',appWithPages(txt('docProps/app.xml'),pages+(/MOP Change Log/.test(filled)?1:0)));
+  if(parts[RECORD_PART])put(RECORD_PART,recordXml(filled,{app:'gne-mop-intake',templateRevision:3,projectId:q.project,mopNo:q.mopNo,rev:sub.rev,status:q.status,record:clone(sub.record)},dom,now())); }
  parts['word/_rels/document.xml.rels']=R.strToU8(rels);parts['[Content_Types].xml']=R.strToU8(ct);
  const ordered={'[Content_Types].xml':parts['[Content_Types].xml']};for(const k of Object.keys(parts))if(k!=='[Content_Types].xml')ordered[k]=parts[k];
  return{bytes:R.zipSync(ordered,{level:6}),name:R.baseName(rec,q.mopNo,sub.rev)+(approved?'':'_DRAFT')+'.docx'}}
+/** "Other Permits" on the MOP: the permits the work triggers, less the ones with their own line (impairment #, fire watch, hot work #, JLL LOTO). */
+const OWN_LINE=/hot work permit|fire impairment notice|^fire watch$|JLL LOTO request/i;
+function mopOtherPermits(r){try{return allPermits(r).filter(x=>!OWN_LINE.test(String(x)))}catch(e){return[]}}
+/** Close-out by / time from the close-out checklist (ticks saved as { by: uid, at } since round 3; older ticks are true). */
+function closeOutFor(q){const c=q.meta.close||{},v=k=>{const e=c[k];if(!e)return null;if(e===true)return{by:'',time:''};const d=fromIso(e.at);return{by:S.names[e.by]||'',time:d?`${fS(d)} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`:''}};
+ const al=Object.keys(c).filter(k=>/^a\d+$/.test(k)||k==='fls').map(v).filter(Boolean);
+ return{loto:v('loto'),alarms:al.length?al[al.length-1]:null,watch:v('watch'),hot:v('hot'),users:v('users'),qa:v('qa')}}
+/** Change log rows: one per submitted revision (q.meta.revLog, since round 3); rev 0 = Initial issue. */
+function changeLogFor(q,rec){const log=(q.meta.revLog||[]).map(e=>({rev:e.rev,date:fL(fromIso(e.at)),by:S.names[e.by]||'',change:e.change||''}));
+ if(!log.some(e=>+e.rev===0)&&q.firstAt)log.unshift({rev:0,date:fL(fromIso(q.firstAt)),by:(rec.author||'').trim()||rec.req.name,change:'Initial issue'});
+ const cur=(q.sub||q).rev||0;for(let n=1;n<=cur;n++)if(!log.some(e=>+e.rev===n))log.push({rev:n,date:'',by:'',change:''});
+ return log.sort((a,b)=>a.rev-b.rev)}
 function trackerVals(q){const rec=outRecord(q),sub=q.sub,row=R.impactRow(rec,q.mopNo),jll=R.jllNeeded(rec),pd=q.meta.preDone,lo=rec.loto.needed==='Yes';
  const sig=k=>!!sigOf(q,'a'+k),st=q.status;
  row[0]=sub.rev?`${pad3(q.mopNo)} rev ${sub.rev}`:q.mopNo;

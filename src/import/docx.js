@@ -4,6 +4,7 @@ import { R, S, STEPS, STATUSES, SIDE, UTIL, GROUPS, SYSTEM_CODES, LOTO_CATS, CAT
 import { newRecord } from '../core/record.js';
 import { libMatches } from '../lib/library.js';
 import { splitImpacts } from './impacts.js';
+import { importEmbedded } from './embedded.js';
 
 function parseMopDocx(u8){const parts=R.unzipSync(u8),xml=parts['word/document.xml'];if(!xml)throw new Error('Not a Word document');
  const doc=new DOMParser().parseFromString(R.strFromU8(xml),'application/xml'),W='http://schemas.openxmlformats.org/wordprocessingml/2006/main',W14='http://schemas.microsoft.com/office/word/2010/wordml';
@@ -22,6 +23,9 @@ function parseMopDocx(u8){const parts=R.unzipSync(u8),xml=parts['word/document.x
  rows.forEach((tr,ri)=>{const cs=cells(tr),ct=cs.map(txt),all=ct.join(' '),hm=H.exec(all);
   if(ri===0){const ck=checks(tr);[['High','H'],['Medium','M'],['Low','L']].forEach(([l,v])=>{if(ck.some(c=>c.on&&c.lab===l))rec.priority=v});mopNo=((/#\s*(\S+)\s*rev\s*(\S+)/i.exec(all))||[]).slice(1).join(' rev ');return}
   if(hm){sec=+hm[1];grp=null;if(sec===2){}return}
+  /* Template v2 round 3: the close-out block and the change log page are not MOP content to read back */
+  if(cs.length===1&&/^(Close-out Verification|MOP Change Log)/.test(ct[0])){sec=99;grp=null;return}
+  if(sec===3&&ct[0]==='Emergency / On-Call'){sec=98;return}
   const lab=(c,l)=>c.startsWith(l)?c.slice(l.length).trim():null;
   ct.forEach(c=>{let v;if((v=lab(c,'MOP Title:'))!==null)rec.title=v;if((v=lab(c,'Work Scope:'))!==null)rec.scope=v.replace(/\s*\(Origin:.*\)\s*$/,'');if((v=lab(c,'Work Area(s):'))!==null)rec.areas=v;const sm=/^([A-Za-z][\w&.'-]*) MOP #:\s*(.*)$/.exec(c);if(sm){rec.subMop=sm[2].trim();if(sm[1]!=='Sub')rec.subShort=sm[1]}});
   if(sec===1){if(GN[ct[0]]){grp=GN[ct[0]];const g=grp==='util'?rec.x.util:rec.sys[grp];checks(tr).forEach(c=>{if(c.on){if(/^Low/.test(c.lab))g.level='L';if(/^Medium/.test(c.lab))g.level='M';if(/^High/.test(c.lab))g.level='H'}});return}
@@ -44,4 +48,12 @@ function parseMopDocx(u8){const parts=R.unzipSync(u8),xml=parts['word/document.x
  const m=libMatches(rec);if(m[0]&&m[0].e.kind==='std'){rec.discipline=m[0].e.discipline}
  return{rec,mopNo}}
 
-export { parseMopDocx };
+/* Template v2 round 3 (JK #8 option A): a MOP this app made carries a hidden copy of its record. Use it, re-reading
+   only the sections someone edited by hand; otherwise (no saved data) the label reading above, as before. */
+function readMopDocx(u8){const o=parseMopDocx(u8),parts=R.unzipSync(u8),txt={};
+ for(const k of Object.keys(parts))if(k==='word/document.xml'||/^customXml\/item\d+\.xml$/.test(k))txt[k]=R.strFromU8(parts[k]);
+ let e={found:false};try{e=importEmbedded(txt,o.rec,{DOMParser,XMLSerializer})}catch(err){e={found:false}}
+ if(!e.found)return{...o,info:[],warn:[],embedded:false};
+ return{rec:R.parseRecord(e.rec),mopNo:e.mopNo||o.mopNo,info:e.info,warn:e.warn,embedded:true,edited:e.edited}}
+
+export { parseMopDocx, readMopDocx };

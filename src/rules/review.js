@@ -278,7 +278,9 @@ export function reviewPrint(r) {
   if (v.riskBy.trim()) add.push('Residual risk accepted by ' + v.riskBy.trim());
   if (v.multiShift === 'Yes') add.push('Multi-shift: pre-task brief and Go/No-Go repeated every shift');
   if (v.dailyRestore === 'Yes') add.push('Repeat steps each day; system restored at the end of each day');
-  const em = [c.emergency && 'Emergency: ' + c.emergency, c.security, c.er && 'Nearest ER: ' + c.er, (r.sup.impair === 'Yes' || r.sys.ls.items.includes('Fire Alarm')) && c.fls && 'SSF FLS hotline ' + c.fls].filter(Boolean);
+  // Template v2 round 3 (JK #11): emergency, security and FLS numbers print as Emergency / On-Call rows in the contact
+  // list (src/rules/emergency.js); only the nearest ER (an address) stays on this line.
+  const em = [c.er && 'Nearest ER: ' + c.er].filter(Boolean);
   if (em.length) add.push(em.join('; '));
   return add;
 }

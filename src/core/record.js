@@ -10,7 +10,9 @@ import { ensureRv, reviewGaps, reviewNotes, offSiteHot } from '../rules/review.j
 import { gatePending, GATE_MESSAGE } from '../import/anymop/apply.js';
 import { upgradeRequest } from './schema.js';
 
-function ensureX(r){r.x=Object.assign({util:{level:'',items:[],other:'',notes:''},qa:'',gmpNotes:'',isoBy:'',rts:'',isoBy2:'',backfeed:'',backfeedSrc:'',cold:'',eyewash:'',dp:'',alarms:'',flags:{},auto:{},autoEd:{},scopeOk:false},r.x||{});r.x.util=Object.assign({level:'',items:[],other:'',notes:''},r.x.util||{});
+function ensureX(r){r.x=Object.assign({util:{level:'',items:[],other:'',notes:''},qa:'',gmpNotes:'',isoBy:'',rts:'',isoBy2:'',backfeed:'',backfeedSrc:'',cold:'',eyewash:'',dp:'',alarms:'',flags:{},auto:{},autoEd:{},scopeOk:false,permits:{impairNo:'',fireWatch:'',monitoring:'',hotWorkNo:''},revWhy:''},r.x||{});r.x.util=Object.assign({level:'',items:[],other:'',notes:''},r.x.util||{});
+ /* Template v2 round 3 (11/26/26): MOP permit lines and the change-log note for a revision */
+ r.x.permits=Object.assign({impairNo:'',fireWatch:'',monitoring:'',hotWorkNo:''},r.x.permits&&typeof r.x.permits==='object'&&!Array.isArray(r.x.permits)?r.x.permits:{});if(typeof r.x.revWhy!=='string')r.x.revWhy='';
  ['flags','auto','autoEd'].forEach(k=>{if(!r.x[k]||typeof r.x[k]!=='object'||Array.isArray(r.x[k]))r.x[k]={}});if(Array.isArray(r.x.alarms))r.x.alarms=r.x.alarms.join('\n');
  if(r.loto&&Array.isArray(r.loto.points))r.loto.points.forEach(p=>{if(p.confirmed===undefined)p.confirmed=''});return ensureRv(r)}
 function newRecord(){return ensureX(R.blankRecord())}
@@ -45,6 +47,8 @@ function gapsFor(q){const r=ensureX(q.record);const g=baseGaps(q).filter(x=>{con
  const rg=ruleGaps(q).filter(x=>!(x.rule==='hotSteps'&&offSiteHot(r)));
  /* Import Any MOP (Tier A U4): the Import Gate – safety items read from a file must each be confirmed */
  const ig=gatePending(q.meta&&q.meta.importReview),gate=ig.length?[{s:9,m:GATE_MESSAGE(ig.length),rule:'importGate'}]:[];
+ /* Template v2 round 3 (JK #6): a revision says what changed – it prints in the MOP change log */
+ if(q.rev>0&&!(q.meta&&q.meta.pmFix)&&!String(r.x.revWhy||'').trim())gate.push({s:9,m:'Say what changed in this revision',rule:'revWhy'});
  return g.concat(rg,reviewGaps({record:r,tier:tierOf(r).t}),gate)}
 function notesFor(q){const r=ensureX(q.record),o=baseNotes(q),t=tierOf(r),c=cfg(),lo=r.loto.needed==='Yes',e=libById(r.x.lib&&r.x.lib.id);
  o.unshift({l:'info',m:`${TIER_NAME[t.t]}${t.why.length?' ('+t.why.join(', ')+')':''}. ${TIER_ADDS[t.t]}`,s:1});

@@ -2,8 +2,8 @@
 // intake goes through the Rebuild 4 importer (src/import/docx.js, src/vendor-ref/imp.js) unchanged, so it gives
 // exactly the Rebuild 4 result (Tier A plan U1: F01–F03 identical). Main thread (or Node with the mini DOM).
 import { docText } from './docmodel.js';
-import { parseMopDocx } from '../docx.js';
-import { subShortFromLines, intakeExtras } from '../read.js';
+import { readMopDocx } from '../docx.js';
+import { subShortFromLines, intakeExtras, v2PdfLines } from '../read.js';
 
 export const looksLikeGneTemplate = text => /METHOD OF PROCEDURE/i.test(text) && /Impact Notification/i.test(text) && /(Qualified and Authorized Workers|Personnel Contact List|Detailed Step-by-Step)/i.test(text);
 
@@ -14,10 +14,10 @@ export const looksLikeGneTemplate = text => /METHOD OF PROCEDURE/i.test(text) &&
 export async function fingerprint(bytes, sniff, doc, { openPdf = null, MOPIMP = globalThis.MOPIMP } = {}) {
   const kind = sniff && sniff.kind;
   if ((kind === 'docx' || kind === 'docm') && looksLikeGneTemplate(docText(doc))) {
-    const o = parseMopDocx(bytes); return { rec: o.rec, mopNo: o.mopNo, kind: 'Word MOP', info: [], warn: [] };
+    const o = readMopDocx(bytes); return { rec: o.rec, mopNo: o.mopNo, kind: o.embedded ? 'Word MOP (app data)' : 'Word MOP', info: o.info, warn: o.warn };
   }
   if (kind === 'pdf' && MOPIMP && openPdf && looksLikeGneTemplate(docText(doc))) {
-    const pdf = await openPdf(bytes); try { const lines = await MOPIMP.pdfLines(pdf); const o = MOPIMP.parseMopLines(lines); subShortFromLines(o.rec, lines); return { ...o, kind: 'PDF MOP' }; } finally { if (pdf.destroy) pdf.destroy(); }
+    const pdf = await openPdf(bytes); try { const lines = v2PdfLines(await MOPIMP.pdfLines(pdf)); const o = MOPIMP.parseMopLines(lines); subShortFromLines(o.rec, lines); return { ...o, kind: 'PDF MOP' }; } finally { if (pdf.destroy) pdf.destroy(); }
   }
   if ((kind === 'xlsx' || kind === 'xlsm') && MOPIMP) {
     try { const bk = MOPIMP.readXlsx(bytes), o = MOPIMP.parseIntakeXlsx(bk); intakeExtras(o.rec, bk); return { ...o, kind: 'Excel intake' }; } catch { return null; }

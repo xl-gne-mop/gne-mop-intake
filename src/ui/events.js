@@ -23,7 +23,7 @@ import { canSkip } from './screens.js';
 import { trackEdit, clearFlag } from './editHelpers.js';
 import { flagsOf } from '../rules/dontKnow.js';
 import { tierOf } from '../rules/tier.js';
-import { closeGaps } from '../rules/closeOut.js';
+import { closeGaps, closeTick } from '../rules/closeOut.js';
 import { HOLD_E_T, HOLD_P_T, TEST_T, workIdx, insStep } from '../rules/fixes.js';
 import { applyAddon, reviewGate, personFor } from '../rules/review.js';
 import { findTags } from '../dictation/parse.js';
@@ -81,7 +81,7 @@ app.addEventListener('change',e=>{const t=e.target;S.lastAct=Date.now();
  if(t.dataset.up!==undefined&&t.files.length){upload([...t.files]);t.value='';return}
  const q=S.reqs[S.id];
  if(q&&t.dataset.pre!==undefined){const c2=clone(q);c2.meta.preDone[+t.dataset.pre]=t.value;saveReq(c2,`Pre-MOP step ${+t.dataset.pre+1} ${t.value?'completed '+fS(pdDay(t.value)):'cleared'}`).then(render);return}
- if(q&&t.dataset.st){const c2=clone(q),st=stageMeta(c2),k=t.dataset.st;if(k.startsWith('walk.'))st.walk[k.slice(5)]=t.value;else if(k.startsWith('close.'))st.close[k.slice(6)]=t.checked;else st[k]=t.type==='checkbox'?t.checked:t.value;if(k==='workDone'&&c2.stage===8)c2.status=statusFor(8,st);S.quiet=true;saveReq(c2,'').finally(()=>{S.quiet=false;if(k==='workDone')render()});return}
+ if(q&&t.dataset.st){const c2=clone(q),st=stageMeta(c2),k=t.dataset.st;if(k.startsWith('walk.'))st.walk[k.slice(5)]=t.value;else if(k.startsWith('close.'))st.close[k.slice(6)]=closeTick(st.close[k.slice(6)],t.checked,S.uid);else st[k]=t.type==='checkbox'?t.checked:t.value;if(k==='workDone'&&c2.stage===8)c2.status=statusFor(8,st);S.quiet=true;saveReq(c2,'').finally(()=>{S.quiet=false;if(k==='workDone')render()});return}
  if(t.dataset.pilot!==undefined){setPilot(t.checked).then(ok=>{if(!ok)toast(PILOT_NEEDS_IDS);render()});return}
  if(q&&t.dataset.mp){const c2=clone(q),lab=(t.closest('label')||{}).textContent||'';s_(c2.meta,t.dataset.mp,t.type==='checkbox'?t.checked:t.value);S.quiet=t.type!=='checkbox';saveReq(c2,t.type==='checkbox'?`Close-out ${t.checked?'ticked':'unticked'}: ${lab.trim()}`:'').finally(()=>{const was=S.quiet;S.quiet=false;if(!was)render()});return}
  if(q&&t.dataset.meta==='campus'){const c2=clone(q);c2.meta.campus=t.checked;saveReq(c2,t.checked?'Campus notification sent':'Campus notification cleared');return}
@@ -158,12 +158,13 @@ app.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)retu
   S.me={...q.record.req,project:q.project};setSetting('me',S.me);
   {const cr=q.record.workers.filter(w=>w.name.trim());if(cr.length){S.crew=cr;setSetting('crew',cr)}}
   const at=new Date().toISOString();if(!q.firstAt)q.firstAt=at;const pmf=q.meta.pmFix;q.sub={rev:q.rev,at,record:clone(q.record),files:clone(q.files)};const first=!q.stage;if(first){q.stage=1;q.status='Submitted';stageMeta(q).log.push({stage:1,at})}else if(q.stage>=6){q.stage=3;q.status=statusFor(3,stageMeta(q))}else q.status=statusFor(q.stage,stageMeta(q));S.dirty=false;clearTimeout(saveT);
+  if(!pmf){/* Template v2 round 3 (JK #6): one change-log line per submitted revision */const lg=Array.isArray(q.meta.revLog)?q.meta.revLog.filter(e=>e.rev!==q.rev):[];lg.push({rev:q.rev,at,by:S.uid||'',change:q.rev?String(q.record.x.revWhy||'').trim():'Initial issue'});q.meta.revLog=lg.sort((a,b)=>a.rev-b.rev)}
   if(!pmf){q.meta.pilot.subAt=at;q.meta.pilot.dk=flagsOf(q.record).length;q.meta.pilot.edits=Object.keys(q.record.x.autoEd||{}).length}q.meta.pmFix=false;
   saveReq(q,pmf?`Checks answered; ${mopLabel(q)} resubmitted`:`Submitted ${mopLabel(q)}${flagsOf(q.record).length?` with ${flagsOf(q.record).length} Don't know answer(s) for the PM`:''}`,{kind:pmf?'checks.answered':first?'stage.advance':'revision.submit'});toast(`Submitted as ${mopLabel(q)}`);S.view='';go('#r-'+q.id);return}
  const q=S.reqs[S.id];
  if(a==='adv'&&q){const n=(q.stage||0)+1,r=(q.sub||q).record;
   // Read what is on screen in the stage form first: a field typed just before the tap may not have fired 'change' yet.
-  const cur=clone(q),st0=stageMeta(cur);document.querySelectorAll('#app fieldset.stageform [data-st]').forEach(el=>{const k=el.dataset.st,v=el.type==='checkbox'?el.checked:el.value;if(k.startsWith('walk.'))st0.walk[k.slice(5)]=v;else if(k.startsWith('close.'))st0.close[k.slice(6)]=v;else st0[k]=v});
+  const cur=clone(q),st0=stageMeta(cur);document.querySelectorAll('#app fieldset.stageform [data-st]').forEach(el=>{const k=el.dataset.st,v=el.type==='checkbox'?el.checked:el.value;if(k.startsWith('walk.'))st0.walk[k.slice(5)]=v;else if(k.startsWith('close.'))st0.close[k.slice(6)]=closeTick(st0.close[k.slice(6)],v,S.uid);else st0[k]=v});
   document.querySelectorAll('#app fieldset.stageform [data-jr]').forEach(el=>{cur.meta.jllRef[el.dataset.jr]=el.value.trim()});document.querySelectorAll('#app fieldset.stageform [data-rf]').forEach(el=>{cur.meta.refs=Object.assign({},cur.meta.refs);cur.meta.refs[el.dataset.rf]=el.value.trim()});document.querySelectorAll('#app fieldset.stageform [data-meta="campus"]').forEach(el=>{cur.meta.campus=el.checked});
   const gate=gateFor(cur,n,{jllNeeded:R.jllNeeded,approvalsDone:sigStatus(q),hasGoNoGo:R.lines(r.gonogo).length>0&&R.lines(r.backout).length>0,flags:flagsOf(r),tier:tierOf(r).t,closeGaps:closeGaps(q),extraGate:reviewGate});
 
@@ -177,7 +178,7 @@ app.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)retu
  if(a==='syncRetry'){if(S.session){b.disabled=true;b.textContent='Trying…';S.session.syncNow({force:true}).finally(()=>refreshSyncPanel())}return}
  if(a==='copyf'){const el=$(`#${b.dataset.copy}`);navigator.clipboard.writeText(el?el.textContent:'').then(()=>toast('Copied.'),()=>toast('Select the text and copy it.'));return}
  if((a==='hold'||a==='cancel'||a==='resume')&&q){const c2=clone(q);if(a==='resume'){c2.status=statusFor(c2.stage||1,stageMeta(c2));c2.meta.hold=''}else{c2.status=a==='hold'?'On hold':'Cancelled';c2.meta.hold=c2.status}saveReq(c2,'Status: '+c2.status,{kind:'hold.change'}).then(render);render();return}
- if(a==='revise'&&q){const c2=clone(q);c2.rev=(q.sub?q.sub.rev:q.rev)+1;c2.status='Draft';saveReq(c2,`Revision ${c2.rev} started`).then(()=>go('#e-'+q.id));return}
+ if(a==='revise'&&q){const c2=clone(q);c2.rev=(q.sub?q.sub.rev:q.rev)+1;c2.status='Draft';if(c2.record&&c2.record.x)c2.record.x.revWhy='';saveReq(c2,`Revision ${c2.rev} started`).then(()=>go('#e-'+q.id));return}
  if(a==='sign'&&q){sign(q,b.dataset.s,true);return}
  if(a==='unsign'&&q){sign(q,b.dataset.s,false);return}
  if(a==='mop'&&q){toast('Building the MOP…');buildMop(q).then(o=>saveFile(o.name,o.bytes,'application/vnd.openxmlformats-officedocument.wordprocessingml.document')).catch(err=>{console.error(err);toast(err&&(err.code==='template-v1'||err.code==='import-gate')?err.message:'Could not build the MOP.')});return}

@@ -7,5 +7,7 @@ function closeItems(q){const r=q.sub.record,it=[];if(r.loto.needed==='Yes')it.pu
  if(r.sup.watch==='Yes')it.push(['watch','Fire watch ended; log filed']);if(r.sup.hot==='Yes')it.push(['hot','Hot work permit closed']);if(r.sup.cgmp==='Yes')it.push(['qa','GNE QA release recorded (if QA required one)']);
  it.push(['users','Users confirm everything is back in service']);return it}
 const closeGaps=q=>closeItems(q).filter(([k])=>!q.meta.close[k]).map(x=>x[1]);
+/** Template v2 round 3 (JK #5): a tick keeps who and when (the MOP close-out rows print them); still truthy for closeGaps. */
+const closeTick=(prev,on,uid)=>on?(prev&&typeof prev==='object'&&prev.at?prev:{by:uid||'',at:new Date().toISOString()}):false;
 
-export { closeItems, closeGaps };
+export { closeItems, closeGaps, closeTick };

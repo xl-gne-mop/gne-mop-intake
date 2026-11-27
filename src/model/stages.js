@@ -47,6 +47,8 @@ export function bumpDocRev(q) {
   if (!q.sub) return false;
   const old = q.sub.rev, next = old + 1;
   q.sub.rev = next; q.rev = next;
+  // Template v2 round 3 (JK #6): the change log (last page of the MOP) lists every revision, re-issues included
+  if (q.meta) q.meta.revLog = (Array.isArray(q.meta.revLog) ? q.meta.revLog.filter(e => e.rev !== next) : []).concat({ rev: next, at: new Date().toISOString(), by: '', change: 'Re-issued for the next stage (content unchanged)' });
   for (const m of Object.values((q.meta && q.meta.signoffs) || {})) for (const k of Object.keys(m)) { const p = k.split('|'); if (p[0] === q.id && +p[1] === old) m[`${q.id}|${next}|${p[2]}`] = m[k]; }
   return true;
 }
