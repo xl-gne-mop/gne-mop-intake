@@ -27,15 +27,20 @@ const TOOLS=[['hl','Highlight'],['pen','Pen'],['box','Box'],['ell','Circle'],['a
 const HINT={hl:'Drag over the breaker, valve, circuit or load to highlight it.',pen:'Draw freehand in red.',box:'Drag to draw a red box.',ell:'Drag to circle the isolation point.',arrow:'Drag from the label to the point.',text:'Type the label, then tap where it goes.',pan:'Drag or scroll to move around; use + and − to zoom.'};
 async function pageCanvas(n){const page=await MK.pdf.getPage(n),v1=page.getViewport({scale:1}),sc=Math.min(3,2200/Math.max(v1.width,v1.height)),vp=page.getViewport({scale:sc});
  const cv=document.createElement('canvas');cv.width=Math.round(vp.width);cv.height=Math.round(vp.height);const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);await page.render({canvasContext:x,viewport:vp}).promise;return cv}
-async function openMarkup(k,j){const a=D().loto.points[k].att[j];Object.assign(MK,{k,j,ops:clone(a.ops||[]),zoom:1,page:a.page||1,pages:1,cur:null,pdf:null});
- $('#mk').hidden=false;$('#mktb').innerHTML='';$('#mkhint').textContent='Opening '+a.name+'…';
+async function openMarkup(k,j){const a=D().loto.points[k].att[j];Object.assign(MK,{k,j,ops:clone(a.ops||[]),cleared:null,zoom:1,page:a.page||1,pages:1,cur:null,pdf:null});
+ $('#mk').hidden=false;$('#mktb').innerHTML='';$('#mkbar').innerHTML='';$('#mkhint').textContent='Opening '+a.name+'…';
  try{if(a.kind==='pdf'){const L=await pdfjs();const buf=await (await fetchFile((a.id))).arrayBuffer();MK.pdf=await L.getDocument({data:buf}).promise;MK.pages=MK.pdf.numPages;MK.base=await pageCanvas(MK.page)}
   else MK.base=await createImageBitmap(await (await fetchFile((a.id))).blob())}
  catch(e){console.error(e);$('#mk').hidden=true;toast(a.kind==='pdf'?'Could not open this PDF here. Mark it up before uploading and tick Already marked up.':'Could not open this image.');return}
  const c=$('#mkc');c.width=MK.base.width;c.height=MK.base.height;MK.L=Math.max(c.width,c.height);mkToolbar();mkSize();mkDraw()}
+// Tools at the top (they wrap, so every tool shows on a phone); Save / Cancel / Undo / zoom in a bar at the bottom,
+// within thumb reach and clear of the iPhone status bar and Dynamic Island (safe-area insets in app.css).
 function mkToolbar(){const a=D().loto.points[MK.k].att[MK.j];
- $('#mktb').innerHTML='<div class="tr">'+TOOLS.map(([t,l])=>`<button data-mk="tool" data-t="${t}" class="${MK.tool===t?'on':''}" aria-pressed="${MK.tool===t}">${l}</button>`).join('')+'</div>'+
- `<div class="tr"><button class="save" data-mk="save">Save mark-ups</button><button data-mk="cancel">Cancel</button><button data-mk="undo">Undo</button><button data-mk="clear">Clear</button><button data-mk="zo" aria-label="Zoom out">−</button><button data-mk="zi" aria-label="Zoom in">+</button><input id="mktext" placeholder="Label text" aria-label="Label text" value="${esc(MK.text||'')}">${MK.pages>1?`<select data-mkpage aria-label="Page">${Array.from({length:MK.pages},(_,i)=>`<option value="${i+1}" ${MK.page===i+1?'selected':''}>Page ${i+1} of ${MK.pages}</option>`).join('')}</select>`:''}</div>`;
+ $('#mktb').innerHTML='<div class="tools">'+TOOLS.map(([t,l])=>`<button data-mk="tool" data-t="${t}" class="${MK.tool===t?'on':''}" aria-pressed="${MK.tool===t}">${l}</button>`).join('')+'</div>'+
+ (MK.tool==='text'?`<div class="tr"><input id="mktext" placeholder="Type the label, then tap the drawing" aria-label="Label text" value="${esc(MK.text||'')}"></div>`:'');
+ $('#mkbar').innerHTML=(MK.pages>1?`<select data-mkpage aria-label="Page">${Array.from({length:MK.pages},(_,i)=>`<option value="${i+1}" ${MK.page===i+1?'selected':''}>Page ${i+1} of ${MK.pages}</option>`).join('')}</select>`:'')+
+ `<div class="edit"><button data-mk="undo">Undo</button><button data-mk="clear">Clear</button><button data-mk="zo" aria-label="Zoom out">−</button><button data-mk="zi" aria-label="Zoom in">+</button></div>`+
+ `<div class="go"><button data-mk="cancel">Cancel</button><button class="save" data-mk="save">Save mark-ups</button></div>`;
  $('#mkhint').textContent=`${a.cat}: ${a.name}. ${HINT[MK.tool]}`;$('#mkc').style.touchAction=MK.tool==='pan'?'pan-x pan-y':'none'}
 function mkSize(){const c=$('#mkc'),w=$('#mkcv').clientWidth-20;c.style.width=Math.round(Math.max(200,w)*MK.zoom)+'px'}
 function mkPath(x,p){x.beginPath();p.forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1]));if(p.length===1)x.lineTo(p[0][0]+.1,p[0][1]);x.stroke()}
@@ -51,7 +56,7 @@ let mkRaf=0;function mkDraw(){cancelAnimationFrame(mkRaf);mkRaf=requestAnimation
 function mkPt(e){const c=$('#mkc'),r=c.getBoundingClientRect();return[(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height]}
 function mkClose(){$('#mk').hidden=true;MK.base=null;MK.pdf=null}
 async function mkSave(){const a=D().loto.points[MK.k].att[MK.j];if(!MK.ops.length){toast('Add at least one highlight or mark first.');return}
- const btn=document.querySelector('#mktb .save');if(btn){btn.disabled=true;btn.textContent='Saving…'}
+ const btn=document.querySelector('#mkbar .save');if(btn){btn.disabled=true;btn.textContent='Saving…'}
  const c=$('#mkc'),x=c.getContext('2d');x.globalCompositeOperation='source-over';x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(MK.base,0,0);MK.ops.forEach(o=>drawOp(x,o));
  const blob=await new Promise(ok=>c.toBlob(ok,'image/jpeg',.85));
  try{const res=await uploadBlob(blob,{type:'image/jpeg',requestId:S.draft.id,name:'markup-'+a.name});a.mid=res.id;a.ops=MK.ops;a.page=MK.page;if(a.cat==='Isolation point photo'&&!a.shows.iso)a.shows.iso=true;mkClose();S.dirty=true;await saveDraft();render();toast('Mark-ups saved. Tick what the attachment shows.')}
@@ -66,13 +71,14 @@ const c=$('#mkc');
  c.addEventListener('pointermove',e=>{if(!MK.cur)return;const p=mkPt(e);if(MK.cur.p)MK.cur.p.push(p);else MK.cur.b=p;mkDraw()});
  const end=()=>{if(!MK.cur)return;const o=MK.cur;MK.cur=null;if(o.p?o.p.length>1:Math.hypot(o.b[0]-o.a[0],o.b[1]-o.a[1])>4)MK.ops.push(o);mkDraw()};
  c.addEventListener('pointerup',end);c.addEventListener('pointercancel',end);
- $('#mktb').addEventListener('click',async e=>{const b=e.target.closest('[data-mk]');if(!b)return;const k=b.dataset.mk;
-  if(k==='tool'){MK.tool=b.dataset.t;MK.text=($('#mktext')||{}).value||'';mkToolbar();return}
-  if(k==='undo'){MK.ops.pop();mkDraw();return}if(k==='clear'){MK.ops=[];mkDraw();return}
+ $('#mk').addEventListener('click',async e=>{const b=e.target.closest('[data-mk]');if(!b)return;const k=b.dataset.mk;
+  if(k==='tool'){const tx=$('#mktext');if(tx)MK.text=tx.value;MK.tool=b.dataset.t;mkToolbar();mkSize();if(MK.tool==='text')$('#mktext').focus();return}
+  if(k==='undo'){if(MK.ops.length)MK.ops.pop();else if(MK.cleared){MK.ops=MK.cleared;MK.cleared=null}mkDraw();return}
+  if(k==='clear'){if(MK.ops.length){MK.cleared=MK.ops;MK.ops=[];toast('Cleared. Tap Undo to bring the marks back.')}mkDraw();return}
   if(k==='zi'||k==='zo'){MK.zoom=Math.min(4,Math.max(1,MK.zoom*(k==='zi'?1.5:1/1.5)));mkSize();if(MK.zoom>1&&MK.tool!=='pan')toast('Use Move to scroll around while zoomed.');return}
   if(k==='cancel'){mkClose();return}if(k==='save'){mkSave();return}});
- $('#mktb').addEventListener('change',async e=>{if(e.target.dataset.mkpage===undefined)return;MK.page=+e.target.value;MK.ops=[];MK.base=await pageCanvas(MK.page);const c2=$('#mkc');c2.width=MK.base.width;c2.height=MK.base.height;MK.L=Math.max(c2.width,c2.height);mkSize();mkDraw();toast('Showing page '+MK.page+'. Mark-ups apply to this page.')});
- $('#mktb').addEventListener('input',e=>{if(e.target.id==='mktext')MK.text=e.target.value});
+ $('#mk').addEventListener('change',async e=>{if(e.target.dataset.mkpage===undefined)return;MK.page=+e.target.value;MK.ops=[];MK.cleared=null;MK.base=await pageCanvas(MK.page);const c2=$('#mkc');c2.width=MK.base.width;c2.height=MK.base.height;MK.L=Math.max(c2.width,c2.height);mkSize();mkDraw();toast('Showing page '+MK.page+'. Mark-ups apply to this page.')});
+ $('#mk').addEventListener('input',e=>{if(e.target.id==='mktext')MK.text=e.target.value});
  window.addEventListener('resize',()=>{if(!$('#mk').hidden)mkSize()});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#mk').hidden)mkClose()})}
 

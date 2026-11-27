@@ -6,13 +6,16 @@
    LAYOUT: one calm column for intake; board and logs as dense rows; stacks on phones. */
 :root{color-scheme:light dark;--bg:light-dark(#ffffff,#0b1820);--ink:light-dark(#27323A,#e6ecef);--body:light-dark(#4F6475,#b9c6ce);--mut:light-dark(#6b7c89,#8fa0ab);--zone:light-dark(#f1f4f6,#132632);--line:light-dark(#d3dbe0,#24394a);
  --navy:#022F41;--navyb:light-dark(#022F41,#0f5a78);--navyi:light-dark(#022F41,#8cc3d9);--brick:light-dark(#8A2C0F,#ff8a63);--brickz:light-dark(#f8e9e3,#3a1a10);--gold:#D6981F;--goldi:light-dark(#8a5d00,#f0c060);--goldz:light-dark(#fbf1dc,#33280f);--teal:light-dark(#1d6b63,#6fd1c2);--tealz:light-dark(#e2f1ef,#0f2b28)}
+:root{--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px)}
 :root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
 *{box-sizing:border-box;min-width:0}
 body{margin:0;background:var(--bg);color:var(--body);font:16px/1.5 "Trebuchet MS","Segoe UI",Helvetica,Arial,sans-serif;overflow-x:clip}
 h1,h2,h3{font-family:"Trebuchet MS","Segoe UI",Helvetica,Arial,sans-serif;font-weight:700;line-height:1.15;margin:0;color:var(--ink);text-wrap:balance}
 h1{font-size:clamp(26px,4vw,34px)}h2{font-size:21px}h3{font-size:17px;margin:18px 0 8px}
 a{color:var(--navyi)}
-.top{position:sticky;top:0;z-index:5;background:var(--bg)}
+.top{position:sticky;top:0;z-index:5;background:var(--bg);padding-top:var(--sat)}
+#banners:not(:empty){padding-top:var(--sat)}
+body{padding-left:var(--sal);padding-right:var(--sar)}
 .top .row{display:flex;align-items:center;gap:14px;padding:10px max(4vw,14px) 8px}
 .top .logo{height:38px;width:auto;flex:none;background:#fff;border-radius:3px;padding:2px 4px}
 .top .ttl{flex:1;line-height:1.15}.top .ttl b{display:block;color:var(--ink);font-size:19px}.top .ttl span{font-size:13px;color:var(--mut)}
@@ -21,7 +24,7 @@ a{color:var(--navyi)}
 nav{display:flex;gap:2px;overflow-x:auto;background:var(--navy);padding:0 max(4vw,14px)}
 nav a{color:#fff;text-decoration:none;padding:11px 14px;font-size:15px;opacity:.85;flex:none;border-bottom:3px solid transparent}
 nav a.on{opacity:1;font-weight:700;border-bottom-color:var(--gold)}
-main{max-width:1180px;margin:0 auto;padding:20px max(4vw,14px) 60px}
+main{max-width:1180px;margin:0 auto;padding:20px max(4vw,14px) calc(60px + var(--sab))}
 .note{background:var(--goldz);color:var(--goldi);padding:10px 14px;border-radius:4px;margin-bottom:14px;font-size:14px}
 .note.info{background:var(--zone);color:var(--navyi)}.note.ok{background:var(--tealz);color:var(--teal)}.note.err{background:var(--brickz);color:var(--brick)}
 .btn{font:700 15px "Trebuchet MS","Segoe UI",sans-serif;min-height:44px;padding:0 16px;border-radius:4px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none}
@@ -111,18 +114,39 @@ dl.kv dt{color:var(--mut)}dl.kv dd{margin:0;overflow-wrap:anywhere;white-space:p
 pre.pk{white-space:pre-wrap;background:var(--zone);padding:12px;border-radius:4px;font-size:13px;max-height:320px;overflow:auto;color:var(--ink)}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:4px;font-size:14px;z-index:30;max-width:90vw}
 /* mark-up editor */
-#mk{position:fixed;inset:0;z-index:20;background:#0b1820;display:flex;flex-direction:column}
+/* Mark-up editor. Full screen, kept inside the safe area: the app draws under the iPhone status bar
+   (black-translucent + viewport-fit=cover), and iOS takes taps in that strip, so nothing tappable may sit there. */
+#mk{position:fixed;inset:0;z-index:20;background:#0b1820;display:flex;flex-direction:column;height:100dvh}
 #mk[hidden]{display:none}
-#mk .tb{background:var(--navy);border-bottom:4px solid var(--gold);padding:6px 0}
-#mk .tr{display:flex;flex-wrap:nowrap;gap:6px;align-items:center;overflow-x:auto;padding:3px 10px}#mk .tr>*{flex:none}
-#mk .tb button,#mk .tb select{min-height:40px;border-radius:4px;border:1px solid #3b5a6b;background:#0d3a4f;color:#fff;font:700 14px "Trebuchet MS",sans-serif;padding:0 11px;cursor:pointer}
+#mk .tb{background:var(--navy);padding:8px calc(10px + var(--sar)) 8px calc(10px + var(--sal));display:grid;gap:8px}
+#mk #mktb{padding-top:calc(8px + var(--sat));border-bottom:4px solid var(--gold)}
+#mk .tb.bot{border-top:4px solid var(--gold);padding-bottom:calc(8px + var(--sab))}
+#mk .tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:6px}
+#mk .edit{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+#mk .go{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:6px}
+#mk .tr{display:flex;gap:6px}
+#mk .tb button,#mk .tb select{min-height:48px;border-radius:6px;border:1px solid #3b5a6b;background:#0d3a4f;color:#fff;font:700 16px "Trebuchet MS",sans-serif;padding:0 8px;cursor:pointer;touch-action:manipulation}
+#mk .tb button[aria-label]{font-size:24px;line-height:1}
 #mk .tb button.on{background:var(--gold);border-color:var(--gold);color:#022F41}
-#mk .tb button.save{background:#fff;color:#022F41}
-#mk .tb input{width:150px;min-height:40px;padding:6px 8px;font-size:15px;border-radius:4px;border:0}
+#mk .tb button.save{background:#fff;color:#022F41;font-size:18px}
+#mk .tb button:disabled{opacity:.6}
+#mk .tb input{flex:1;min-height:48px;padding:6px 10px;font-size:16px;border-radius:6px;border:0}
 #mk .tb .lab{color:#c9d6de;font-size:13px}
-#mk .cv{flex:1;overflow:auto;background:#22323d;padding:10px}
+#mk .cv{flex:1;min-height:0;overflow:auto;background:#22323d;padding:10px calc(10px + var(--sar)) 10px calc(10px + var(--sal))}
 #mk canvas{display:block;margin:0 auto;background:#fff;touch-action:none;box-shadow:0 2px 12px #0008}
-#mk .hint{color:#c9d6de;font-size:13px;padding:6px 12px;background:#0d2633}
+#mk .hint{color:#c9d6de;font-size:15px;padding:6px calc(12px + var(--sar)) 6px calc(12px + var(--sal));background:#0d2633}
+/* Landscape phone: little height, so tools go down the left side and the actions down the right. */
+@media (orientation:landscape) and (max-height:500px){
+ #mk{display:grid;grid-template-columns:calc(196px + var(--sal)) minmax(0,1fr) calc(196px + var(--sar));grid-template-rows:auto minmax(0,1fr)}
+ #mk .tb button,#mk .tb select{font-size:15px;padding:0 4px}
+ #mk #mktb{grid-column:1;grid-row:1/3;align-content:start;overflow-y:auto;border-bottom:0;border-right:4px solid var(--gold);padding:calc(8px + var(--sat)) 8px calc(8px + var(--sab)) calc(8px + var(--sal))}
+ #mk .tools{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #mk .hint{grid-column:2;grid-row:1;font-size:13px;padding:calc(4px + var(--sat)) 10px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #mk .cv{grid-column:2;grid-row:2;padding:8px 8px calc(8px + var(--sab))}
+ #mk .tb.bot{grid-column:3;grid-row:1/3;align-content:start;overflow-y:auto;border-top:0;border-left:4px solid var(--gold);padding:calc(8px + var(--sat)) calc(8px + var(--sar)) calc(8px + var(--sab)) 8px}
+ #mk .edit{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #mk .go{grid-template-columns:minmax(0,1fr);order:-1}
+}
 @media(max-width:860px){.cols{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:600px){.top .ttl span,.top .who{display:none}.g2,.g3{grid-template-columns:minmax(0,1fr)}.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.card{grid-template-columns:74px minmax(0,1fr)}.card .r{grid-column:2}table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;color:var(--mut);white-space:normal}.stack td:empty{display:none}dl.kv{grid-template-columns:7em minmax(0,1fr)}}
 @media(prefers-reduced-motion:no-preference){.sheet{animation:in .18s ease-out}@keyframes in{from{opacity:0;transform:translateY(6px)}}}
@@ -219,7 +243,7 @@ details.rec { margin-top: 6px; } details.rec input { margin: 4px 0; }
 .imp-progress{text-align:center;padding:28px 16px}.imp-progress .big,.sub.big{font-size:18px}
 .spin{width:36px;height:36px;border:4px solid var(--line);border-top-color:var(--navyb);border-radius:50%;margin:0 auto 12px;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
-.imp-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:5}.imp-top .btn{min-height:48px}
+.imp-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;position:sticky;top:var(--hdr,0px);background:var(--bg);padding:8px 0;z-index:5}.imp-top .btn{min-height:48px}
 .imp-sec{font-size:17px;margin:18px 0 6px}
 .imp-card{border:1px solid var(--line);border-left:6px solid #9aa3ad;border-radius:6px;padding:10px 12px;margin:8px 0;background:var(--bg)}
 .imp-card.c-green{border-left-color:#2e7d32}.imp-card.c-amber{border-left-color:#c77700}.imp-card.c-grey,.imp-card.c-hint{border-left-color:#9aa3ad}
@@ -228,7 +252,7 @@ details.rec { margin-top: 6px; } details.rec input { margin: 4px 0; }
 .imp-v{margin:6px 0;white-space:pre-wrap;word-break:break-word}.imp-list{margin:4px 0 4px 18px;padding:0}.imp-note{color:#7a4b00}
 .imp-card .btn,.imp-fix .btn,.imp-sheet .btn{min-height:48px}.pill.done{background:#e8f5e9;color:#1b5e20}.pill.red{background:#ffebee;color:#b71c1c}
 .imp-fix textarea,.imp-fix input{width:100%;font-size:16px;min-height:48px;margin:6px 0}
-.imp-sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;z-index:50}
+.imp-sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;z-index:50;padding:var(--sat) var(--sar) var(--sab) var(--sal)}
 .imp-sheet-in{background:var(--bg);width:100%;max-height:85vh;overflow:auto;border-radius:12px 12px 0 0;padding:12px 16px}
 .imp-canvas{width:100%;height:auto;border:1px solid var(--line)}.imp-quote mark{background:#fff3a0;padding:2px}
 .imp-other li{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}.imp-other li span{flex:1 1 200px}.imp-other select{min-height:48px}
@@ -238,3 +262,13 @@ details.rec { margin-top: 6px; } details.rec input { margin: 4px 0; }
 .aco{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;text-align:left;min-height:48px;padding:6px 12px;border:0;border-top:1px solid var(--line);background:var(--bg);color:var(--ink);font:400 16px "Trebuchet MS","Segoe UI",sans-serif;cursor:pointer;width:100%}
 .aco:first-child{border-top:0}.aco:hover,.aco:focus-visible{background:var(--zone)}.aco:focus-visible{outline:3px solid var(--gold);outline-offset:-3px}
 .aco small{display:block;margin:0;font-size:13px;color:var(--mut)}
+
+/* Phone menu (11/27/26): all five tabs on screen at once instead of a sideways-scrolling strip. */
+@media (max-width:600px){
+ nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;padding:0 var(--sar) 0 var(--sal);overflow:visible}
+ nav a{display:flex;align-items:center;justify-content:center;text-align:center;min-height:48px;padding:6px 2px;font-size:13px;line-height:1.15}
+}
+/* Messages never block a tap, and in the mark-up editor they float above the bottom button bar. */
+.toast{pointer-events:none}
+body:has(#mk:not([hidden])) .toast{bottom:calc(150px + var(--sab))}
+@media (orientation:landscape) and (max-height:500px){body:has(#mk:not([hidden])) .toast{bottom:calc(16px + var(--sab))}}
