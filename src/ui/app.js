@@ -8,6 +8,7 @@ import { vLogs } from './logs.js';
 import { vSettings } from './settings.js';
 import { renderBackup } from './backupBox.js';
 import { route, wireEvents } from './events.js';
+import { wireAutocomplete } from './autocomplete.js';
 import { refreshWaiting, refreshNet } from './header.js';
 import { rebuildSigs } from '../approve/signatures.js';
 import { initMarkup } from '../attach/markup.js';
@@ -105,7 +106,7 @@ export async function startApp() {
   S.session = session; S.conflicts = await listConflicts();
   S.remoteApi = createRemote({ getToken: () => session.google.getToken(), smartsheet: session.smartsheet });
   await session.handleRedirects();
-  wireSyncBar(session); wireEvents(); initMarkup(); startPilotClock(); await refreshWaiting(); route(); renderSyncBar();
+  wireSyncBar(session); wireEvents(); wireAutocomplete(document.getElementById('app')); initMarkup(); startPilotClock(); await refreshWaiting(); route(); renderSyncBar();
   session.resume();
   // Sync triggers: back online, back to the app. Background Sync is only a bonus where the browser has it.
   window.addEventListener('online', () => session.syncNow());

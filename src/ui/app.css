@@ -233,3 +233,8 @@ details.rec { margin-top: 6px; } details.rec input { margin: 4px 0; }
 .imp-canvas{width:100%;height:auto;border:1px solid var(--line)}.imp-quote mark{background:#fff3a0;padding:2px}
 .imp-other li{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}.imp-other li span{flex:1 1 200px}.imp-other select{min-height:48px}
 .muted{color:#6b7480}
+/* Type-ahead suggestions under a field (src/ui/autocomplete.js) */
+.acl{display:flex;flex-direction:column;border:1px solid var(--line);border-top:0;border-radius:0 0 4px 4px;background:var(--bg);margin-top:-1px}
+.aco{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;text-align:left;min-height:48px;padding:6px 12px;border:0;border-top:1px solid var(--line);background:var(--bg);color:var(--ink);font:400 16px "Trebuchet MS","Segoe UI",sans-serif;cursor:pointer;width:100%}
+.aco:first-child{border-top:0}.aco:hover,.aco:focus-visible{background:var(--zone)}.aco:focus-visible{outline:3px solid var(--gold);outline-offset:-3px}
+.aco small{display:block;margin:0;font-size:13px;color:var(--mut)}
