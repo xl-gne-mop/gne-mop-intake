@@ -7,6 +7,7 @@ import { fl, flagsOf, gapPath } from '../rules/dontKnow.js';
 import { ruleGaps, hasStep } from '../rules/failureModes.js';
 import { permitsFor, reviewDue } from '../rules/permits.js';
 import { ensureRv, reviewGaps, reviewNotes, offSiteHot } from '../rules/review.js';
+import { gatePending, GATE_MESSAGE } from '../import/anymop/apply.js';
 
 function ensureX(r){r.x=Object.assign({util:{level:'',items:[],other:'',notes:''},qa:'',gmpNotes:'',isoBy:'',rts:'',isoBy2:'',backfeed:'',backfeedSrc:'',cold:'',eyewash:'',dp:'',alarms:'',flags:{},auto:{},autoEd:{},scopeOk:false},r.x||{});r.x.util=Object.assign({level:'',items:[],other:'',notes:''},r.x.util||{});
  ['flags','auto','autoEd'].forEach(k=>{if(!r.x[k]||typeof r.x[k]!=='object'||Array.isArray(r.x[k]))r.x[k]={}});if(Array.isArray(r.x.alarms))r.x.alarms=r.x.alarms.join('\n');
@@ -40,12 +41,16 @@ function baseNotes(q){const r=q.record,o=[],p=proj(q.project);
 /* Rebuild 5 (r5:354, 357): base checks minus answers marked Don't know, plus the failure-mode rules and tier notes. */
 function gapsFor(q){const r=ensureX(q.record);const g=baseGaps(q).filter(x=>{const p=gapPath(x.m);return !(p&&fl(r,p))});
  /* MOP review 11/26/26: hot work done in an off-site shop needs no on-site permit steps; plus the review rules (src/rules/review.js) */
- const rg=ruleGaps(q).filter(x=>!(x.rule==='hotSteps'&&offSiteHot(r)));return g.concat(rg,reviewGaps({record:r,tier:tierOf(r).t}))}
+ const rg=ruleGaps(q).filter(x=>!(x.rule==='hotSteps'&&offSiteHot(r)));
+ /* Import Any MOP (Tier A U4): the Import Gate – safety items read from a file must each be confirmed */
+ const ig=gatePending(q.meta&&q.meta.importReview),gate=ig.length?[{s:9,m:GATE_MESSAGE(ig.length),rule:'importGate'}]:[];
+ return g.concat(rg,reviewGaps({record:r,tier:tierOf(r).t}),gate)}
 function notesFor(q){const r=ensureX(q.record),o=baseNotes(q),t=tierOf(r),c=cfg(),lo=r.loto.needed==='Yes',e=libById(r.x.lib&&r.x.lib.id);
  o.unshift({l:'info',m:`${TIER_NAME[t.t]}${t.why.length?' ('+t.why.join(', ')+')':''}. ${TIER_ADDS[t.t]}`,s:1});
  if(lo&&t.t===2&&!hasStep(r,/HOLD POINT/i))o.push({l:'warn',m:'Add an isolation hold point after the lockout (recommended; required on Tier 3).',s:7});
  const hrs=(parseFloat(r.durVal)||0)*(r.durUnit==='days'?24:r.durUnit==='weeks'?168:1);
- if(r.sup.impair==='Yes'&&r.sup.watch!=='Yes'&&hrs>(+c.rules.fwHours||4))o.push({l:'warn',m:`Impairment over ${+c.rules.fwHours||4} hours with no fire watch. Fire watch is usually required (NFPA 101: over 4 h in 24 h; NFPA 25: over 10 h in 24 h). Confirm with Siemens FLS and SSF Fire.`,s:6});
+ /* Decision #13 (JK 11/26/26): every FLS impairment gets the fire watch prompt, any length (no hours threshold). */
+ void hrs;if(r.sup.impair==='Yes'&&r.sup.watch!=='Yes')o.push({l:'warn',m:'Life-safety impairment with no fire watch. Every FLS impairment needs a fire watch, any length (JK 11/26/26). Confirm with Siemens FLS and SSF Fire.',s:6});
  if(r.x.backfeed==='Yes'&&lo&&r.loto.points.length<2)o.push({l:'warn',m:'Other power source: add it as its own isolation point so it is locked out too.',s:3});
  const pm=permitsFor(r);if(pm.length)o.push({l:'info',m:'Permits and notices this work needs: '+pm.join('; '),s:6});
  const fg=flagsOf(r);if(fg.length)o.push({l:'warn',m:`${fg.length} answer${fg.length>1?'s':''} marked Don’t know: ${fg.map(x=>x.m).join('; ')}. You can submit; the XL PM checks them before it goes out for approval.`,s:fg[0].s});

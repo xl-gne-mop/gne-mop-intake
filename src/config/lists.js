@@ -27,6 +27,8 @@ export function projectFromRow(r) {
 }
 
 import { reviewSettings } from '../rules/review-settings.js';
+import { companyNamesFrom } from './companies.js';
+import { appHolidays } from '../util/holidays.js';
 
 const val = (s, k, d) => (s && s[k] && s[k].value !== undefined && s[k].value !== '' ? s[k].value : d);
 
@@ -34,7 +36,7 @@ const val = (s, k, d) => (s && s[k] && s[k].value !== undefined && s[k].value !=
  * Build the Rebuild 4 cfg() object. defaultRules = SRI.DEFAULT_SETTINGS (holidays, lead days ...).
  * folderUrl = the MOP Test folder link written into the tracker's "GDrive: MOP Attachments" cell.
  */
-export function cfgFromLists(lists, { defaultRules, folderUrl = '' } = {}) {
+export function cfgFromLists(lists, { defaultRules, folderUrl = '', now = new Date() } = {}) {
   const s = (lists && lists.settings) || {};
   const ids = val(s, 'JLLFieldIds', null);
   const rules = {
@@ -43,9 +45,11 @@ export function cfgFromLists(lists, { defaultRules, folderUrl = '' } = {}) {
     jllMinWorkdays: +val(s, 'JLLMinWorkdays', defaultRules.jllMinWorkdays),
     jllMaxWorkdays: +val(s, 'JLLMaxWorkdays', defaultRules.jllMaxWorkdays),
     jllMaxLines: +val(s, 'JLLMaxLines', defaultRules.jllMaxLines),
-    holidays: Array.isArray(val(s, 'Holidays', null)) ? val(s, 'Holidays', null).slice() : defaultRules.holidays.slice(),
+    holidays: appHolidays(now), // decision #22 (JK 11/26/26): US federal holidays (lists.json Holidays no longer used)
     jllFieldIds: ids && typeof ids === 'object' ? Object.fromEntries(Object.entries(ids).filter(([, v]) => /^\d+$/.test(String(v))).map(([k, v]) => [k, String(v)])) : {},
-    fwHours: +val(s, 'FireWatchHours', 4), twoPerson: +val(s, 'SecondCheckTier', 3)
+    // Decisions #13 / #14 (JK 11/26/26): fire watch prompt on every FLS impairment and a second-person check on every
+    // LOTO; FireWatchHours / SecondCheckTier in lists.json are no longer used (kept here for older screens only).
+    fwHours: 0, twoPerson: 1
   };
   return {
     rules, folder: folderUrl, printAdditions: val(s, 'PrintAdditions', 'Yes') !== 'No', additions: val(s, 'TemplateAdditions', 'Yes') !== 'No', requireMarkup: val(s, 'RequireMarkup', 'Yes') !== 'No',
@@ -53,6 +57,10 @@ export function cfgFromLists(lists, { defaultRules, folderUrl = '' } = {}) {
     projects: ((lists && lists.projects) || []).map(projectFromRow).filter(p => p.id),
     editors: ((lists && lists.editors) || []).map(e => String(e).trim().toLowerCase()).filter(Boolean),
     review: reviewSettings(s, val),
+    companyNames: companyNamesFrom(s), // Template v2: bold in MOP steps; editors change it in Settings → Companies
+    // Import Any MOP: extra labels editors published (suggest → publish) and the room-number pattern (decision #8, warn only)
+    importSynonyms: (() => { const v = val(s, 'ImportSynonyms', null); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; })(),
+    roomPattern: (() => { const v = val(s, 'RoomPattern', ''); return typeof v === 'string' && v.trim() ? v.trim() : null; })(),
     // MOP review 11/26/26 project directory (optional in lists.json): people to pre-fill the requester,
     // trade contacts per project for the subcontractor contacts, campus info shown in Settings.
     people: ((lists && lists.people) || []).filter(p => p && p.name).map(p => ({ name: String(p.name), title: p.title || '', company: p.company || '', phone: p.phone || '', email: String(p.email || '').trim().toLowerCase(), projects: p.projects || '' })),

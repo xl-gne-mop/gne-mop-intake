@@ -2,7 +2,9 @@
 //   1. the current library file is kept as a copy "library-v<N>-superseded-<MM-DD-YY>.json" in Config;
 //   2. the same file id gets the new JSON (so config.CONFIG_FILES.library never changes).
 // A suggestion goes to "MOP Test/Library inbox/" as one JSON file. Both are safe to repeat.
+// Template v2 (11/26/26): "lists.companies" writes the editors' company-name list into lists.json.
 import { supersededName } from '../library/publish.js';
+import { listsWithCompanies } from '../config/companies.js';
 import { SyncStop } from './reconcile.js';
 
 const JSONT = 'application/json';
@@ -33,6 +35,14 @@ export async function syncLibraryOp(op, { api, config, state, now, canEdit }) {
     }
     await api.updateMedia(fileId, jsonBlob(next), JSONT);
     st.done = true; await save(); return { ok: true };
+  }
+  if (op.kind === 'lists.companies') {
+    // Template v2 company names: read the newest lists.json and replace only settings.CompanyNames (safe to repeat).
+    const fileId = config.CONFIG_FILES.lists;
+    if (canEdit && !(await canEdit(fileId))) throw new SyncStop("You can't change the lists file in Drive. Ask JK to share Config with you as Editor.", 'access');
+    const cur = parse(await api.getMedia(fileId));
+    await api.updateMedia(fileId, jsonBlob(listsWithCompanies(cur, op.payload.names || [])), JSONT);
+    return { ok: true };
   }
   return { ok: true, skipped: op.kind };
 }

@@ -38,13 +38,14 @@ export async function drain(d) {
       if (r.waitingFor === 'smartsheet') { out.waiting++; if (op.attempts || op.lastError) { op.lastError = ''; await d.outbox.put(op); } continue; }
       await d.outbox.remove(op.id); out.sent++;
     } catch (e) {
+      if (e instanceof SyncStop && e.kind === 'importGate') { out.waiting++; if (!out.message) out.message = e.message; continue; } // waits for the user; no retry loop
       if (e && e.status === 401 && !e.smartsheet) { out.stopped = 'signin'; out.message = 'Sign in to sync'; out.waiting += ops.length - out.sent - out.waiting; return out; }
       op.attempts = (op.attempts || 0) + 1; op.lastError = (e && e.message) || String(e);
       op.nextAt = new Date(t + backoffMs(op.attempts)).toISOString(); await d.outbox.put(op);
       out.waiting++;
       if (e instanceof SyncStop || (e && (e.status === 403 || e.status === 404))) out.message = e instanceof SyncStop ? e.message : 'Google said no access. Ask JK to share it with you.';
       else if (!out.message) out.message = 'Some changes did not go yet. They will try again.';
-      if (e instanceof SyncStop && e.kind === 'access') { out.stopped = 'access'; return out; }
+      if (e instanceof SyncStop && (e.kind === 'access' || e.kind === 'template')) { out.stopped = e.kind; return out; }
     }
   }
   if (!out.message) out.message = out.waiting ? (ss || !d.ssReady ? `${out.waiting} waiting – will retry` : `${out.waiting} waiting for Smartsheet`) : 'All sent';

@@ -27,6 +27,8 @@ import { HOLD_E_T, HOLD_P_T, TEST_T, workIdx, insStep } from '../rules/fixes.js'
 import { applyAddon, reviewGate, personFor } from '../rules/review.js';
 import { findTags } from '../dictation/parse.js';
 import { sendSug, dismissSuggestion } from '../library/suggest.js';
+import { companyAction } from './companies.js';
+import { openImport, openShared, importAction, readAny, suggestLabel, resumeImport, drawWhere } from './importAny.js';
 import { ledFrom, libPublish, libSaveDraft, markReviewed } from '../library/editor.js';
 import { PILOT_COLS, pilotRows, csv, setPilot, PILOT_NEEDS_IDS } from '../pilot/log.js';
 
@@ -45,6 +47,8 @@ function route(){const h=location.hash.slice(1);
  if(h==='new'){if(!(S.view==='edit'&&S.draft&&!S.draft.mopNo&&!S.reqs[S.draft.id]?.sub)){const q=normReq({});const me={...(S.me||{})};const proj0=me.project;delete me.project;Object.assign(q.record.req,me);if(!q.record.req.name)q.record.req.name=S.meName;if(!q.record.req.email&&S.uid)q.record.req.email=S.uid;{const pp=personFor(q.record.req.email);if(pp){const rq=q.record.req;if(!rq.name)rq.name=pp.name;if(!rq.company)rq.company=pp.company;if(!rq.phone)rq.phone=pp.phone}}me.project=proj0;const cr=S.crew||[];if(Array.isArray(cr)&&cr.length)q.record.workers=cr.slice(0,R.LIMITS.workers).map(w=>({name:w.name||'',title:w.title||'',company:w.company||''}));if(me.project)q.project=me.project;openEdit(q)}}
  else if(h.startsWith('e-')&&S.reqs[h.slice(2)]){if(!(S.view==='edit'&&S.draft&&S.draft.id===h.slice(2)))openEdit(S.reqs[h.slice(2)])}
  else if(h.startsWith('r-')){S.view='detail';S.id=h.slice(2)}
+ else if(h==='import')openImport();
+ else if(h==='import-shared'){openShared();history.replaceState(null,'','#import')}
  else if(h==='logs'||h==='settings'||h==='help')S.view=h;else S.view='board';
  render();window.scrollTo(0,0)}
 function wireEvents(){window.addEventListener('hashchange',route);
@@ -54,6 +58,8 @@ app.addEventListener('input',e=>{const t=e.target;S.lastAct=Date.now();
  if(t.dataset.k&&S.draft){const old=S.prevVal&&S.prevVal.k===t.dataset.k?S.prevVal.v:g(D(),t.dataset.k);if(!S.prevVal||S.prevVal.k!==t.dataset.k)S.prevVal={k:t.dataset.k,v:old};s_(D(),t.dataset.k,t.type==='checkbox'?t.checked:t.value);clearFlag(t.dataset.k,t.value);trackEdit(t.dataset.k,old,t.value);later();refreshGaps();if(t.type==='datetime-local'||t.dataset.k==='durVal'){const z=$('.zone');if(z&&S.step===2)z.outerHTML=leadHTML()}return}
  if(t.dataset.flt==='q'){S.filter.q=t.value;const pos=t.selectionStart;render();const n=$('[data-flt=q]');n.focus();n.setSelectionRange(pos,pos)}});
 app.addEventListener('change',e=>{const t=e.target;S.lastAct=Date.now();
+ if(t.dataset.anyfile!==undefined){if(t.files&&t.files.length)readAny([...t.files]);t.value='';return}
+ if(t.dataset.impsyn!==undefined){if(t.value)suggestLabel(+t.dataset.impsyn,t.value);t.value='';return}
  if(t.dataset.le&&S.ledit){S.ledit[t.dataset.le]=t.type==='checkbox'?t.checked:t.value;if(t.dataset.le==='major')render();return}
  if(t.dataset.k&&S.draft){const old=g(D(),t.dataset.k);s_(D(),t.dataset.k,t.type==='checkbox'?t.checked:t.value);clearFlag(t.dataset.k,t.value);if(t.tagName==='SELECT')trackEdit(t.dataset.k,old,t.value);R.normalize(D());later();if(t.dataset.rr!==undefined||t.type==='datetime-local')render();return}
  if(t.dataset.pj!==undefined&&S.draft){S.draft.project=t.value;const p=proj(t.value);if(p&&!D().bldg)D().bldg=p.bldg;later();render();return}
@@ -172,7 +178,7 @@ app.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)retu
  if(a==='revise'&&q){const c2=clone(q);c2.rev=(q.sub?q.sub.rev:q.rev)+1;c2.status='Draft';saveReq(c2,`Revision ${c2.rev} started`).then(()=>go('#e-'+q.id));return}
  if(a==='sign'&&q){sign(q,b.dataset.s,true);return}
  if(a==='unsign'&&q){sign(q,b.dataset.s,false);return}
- if(a==='mop'&&q){toast('Building the MOP…');buildMop(q).then(o=>saveFile(o.name,o.bytes,'application/vnd.openxmlformats-officedocument.wordprocessingml.document')).catch(err=>{console.error(err);toast('Could not build the MOP.')});return}
+ if(a==='mop'&&q){toast('Building the MOP…');buildMop(q).then(o=>saveFile(o.name,o.bytes,'application/vnd.openxmlformats-officedocument.wordprocessingml.document')).catch(err=>{console.error(err);toast(err&&(err.code==='template-v1'||err.code==='import-gate')?err.message:'Could not build the MOP.')});return}
  if(a==='loto1'&&q){saveFile(R.baseName(outRecord(q),q.mopNo,q.sub.rev)+'_LOTO-rows.xlsx',buildLoto([q]));return}
  if(a==='trk1'&&q){saveFile(R.baseName(outRecord(q),q.mopNo,q.sub.rev)+'_Impact-Log-row.xlsx',buildTracker([q]));return}
  if(a==='jlltxt'&&q){saveFile(R.baseName(outRecord(q),q.mopNo,q.sub.rev)+'_JLL-request.txt',jllText(q),'text/plain');return}
@@ -185,7 +191,10 @@ app.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)retu
  if((a==='signout'||a==='signoutForce')&&S.session){signOut({google:S.session.google,smartsheet:S.session.smartsheet,countOutbox,confirmed:a==='signoutForce'}).then(r=>{if(r.needsConfirm){S.signoutAsk=r.waiting;render();return}location.replace(location.pathname)});return}
  if(a==='signoutCancel'){S.signoutAsk=0;render();return}
  if(a==='signoutBackup'){exportBackup().then(b=>{saveFile(b.name,b.blob);toast('Backup saved. You can sign out now.')});return}
- if(a==='stab'){S.setTab=i;S.projEdit=null;S.ledit=null;render();return}
+ if(a==='stab'){S.setTab=i;S.projEdit=null;S.ledit=null;S.coRename=null;render();return}
+ if(a.startsWith('co')&&companyAction(a,b,app))return;
+ if(a.startsWith('imp')&&a!=='impnew'&&importAction(a,b,app))return;
+ if(a==='impResume'){const q=S.draft||q0();if(q)resumeImport(q);return}
  if(a==='pedit'){S.projEdit=cfg().projects[i]||null;render();return}
  if(a==='pcancel'){S.projEdit=null;render();return}
  });

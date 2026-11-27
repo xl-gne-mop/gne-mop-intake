@@ -13,7 +13,13 @@ const pad = n => String(n).padStart(2, '0');
 const stamp = d => { const h = d.getHours(); return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${String(d.getFullYear()).slice(2)} ${h % 12 || 12}:${pad(d.getMinutes())} ${h < 12 ? 'AM' : 'PM'}`; };
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
+import { gatePending, GATE_MESSAGE } from '../import/anymop/apply.js';
 export class SyncStop extends Error { constructor(message, kind) { super(message); this.kind = kind; } }
+/** Template v2 (11/26/26): a cached v1 MOP template stops the sync with a plain message (no retry loop). */
+async function buildMopOrStop(d, q) {
+  try { return await d.build.mop(q); }
+  catch (e) { if (e && e.code === 'template-v1') throw new SyncStop(e.message, 'template'); throw e; }
+}
 
 export function emptyState() {
   return { requestId: '', drive: { revs: {}, superseded: {}, att: {} }, trackerRow: 0, ss: { rows: {}, notes: [] }, stagesWritten: { tracker: 0, smartsheet: 0 }, revWritten: { tracker: -1, smartsheet: -1 }, base: { tracker: null, smartsheet: {}, requestJson: null }, conflicts: [], notes: [] };
@@ -55,6 +61,7 @@ export function nextRequestId(projectId, seen) {
 export async function reconcileRequest(q, d) {
   d = { ...d, sheetId: d.pilot ? d.config.PILOT_SHEET_ID : d.config.SMARTSHEET_SHEET_ID };
   if (!q.sub || !q.stage) return { ok: true, skipped: 'draft' }; // drafts stay on the phone
+  { const n = gatePending(q.meta && q.meta.importReview).length; if (n) throw new SyncStop(GATE_MESSAGE(n), 'importGate'); } // Import Gate: no Drive / Sheets / Smartsheet write
   const st = (await d.state.get(q.id)) || emptyState();
   const save = () => d.state.put(q.id, st);
   const proj = (d.cfg.projects || []).find(p => p.id === q.project) || { id: q.project, label: q.project };
@@ -87,7 +94,7 @@ export async function reconcileRequest(q, d) {
   const mopFolder = await folder('mopFolder', projectFolder, mopFolderName(q.mopNo, title));
   let newRev = false;
   if (!st.drive.revs[rev]) {
-    const b = await d.build.mop(q);
+    const b = await buildMopOrStop(d, q);
     const f = await d.api.upload(mopFolder, mopFileName(q.mopNo, rev, title), b.bytes, DOCX);
     st.drive.revs[rev] = f.id; st.drive.current = f.id; newRev = true;
     st.notes.push(`DONE: MOP rev ${rev} file ${f.id} (${mopFileName(q.mopNo, rev, title)})`); await save();
@@ -100,17 +107,25 @@ export async function reconcileRequest(q, d) {
   }
   for (const [key, at, suffix] of [['approved', 7, approvedSuffix], ['completed', 9, completedSuffix]]) {
     if (q.stage >= at && !st.drive[key]) {
-      const name = mopFileName(q.mopNo, rev, title, suffix(now)), b = await d.build.mop(q);
+      const name = mopFileName(q.mopNo, rev, title, suffix(now)), b = await buildMopOrStop(d, q);
       const f = await d.api.upload(mopFolder, name, b.bytes, DOCX); st.drive[key] = f.id;
       st.notes.push(`DONE: MOP ${key} copy file ${f.id} (${name})`); await save();
     }
   }
-  const attIds = [...new Set([...(q.sub.files || []), ...(q.files || [])].map(f => f.id)), ...(rec.loto.points || []).flatMap(p => (p.att || []).flatMap(a => [a.id, a.mid].filter(Boolean)))];
+  const attIds = [...new Set([...(q.sub.files || []), ...(q.files || [])].filter(f => !f.source).map(f => f.id)), /* the imported original goes to Source/ */ ...(rec.loto.points || []).flatMap(p => (p.att || []).flatMap(a => [a.id, a.mid].filter(Boolean)))];
   for (const id of attIds) {
     if (st.drive.att[id]) continue; const blob = d.blob(id); if (!blob) continue;
     const attFolder = await folder('attachmentsFolder', mopFolder, 'Attachments');
     const f = await d.api.upload(attFolder, `${id}.${/pdf/.test(blob.type) ? 'pdf' : 'jpg'}`, blob, blob.type || 'application/octet-stream');
     st.drive.att[id] = f.id; await save();
+  }
+  // Import Any MOP: the original file in Source/ and "MOP-### rev N_import-audit.json" next to the MOP (old revs → Superseded)
+  if (q.importAudit) {
+    const srcId = q.meta.importSource && q.meta.importSource.id, blob = srcId ? d.blob(srcId) : null;
+    if (blob && !st.drive.source) { const sf = await folder('sourceFolder', mopFolder, 'Source'); const nm = (q.meta.importSource.name || 'source').replace(/[\\/:*?"<>|]+/g, '_'); const f = (await d.api.findChild(sf, nm)) || (await d.api.upload(sf, nm, blob, blob.type || 'application/octet-stream')); st.drive.source = f.id; await save(); }
+    st.drive.audit = st.drive.audit || {};
+    if (!st.drive.audit[rev]) { const nm = `MOP-${mop3(q.mopNo)} rev ${rev}_import-audit.json`; const f = (await d.api.findChild(mopFolder, nm, 'application/json')) || (await d.api.upload(mopFolder, nm, new Blob([JSON.stringify({ ...q.importAudit, mop: `MOP-${mop3(q.mopNo)}`, rev }, null, 2)], { type: 'application/json' }), 'application/json')); st.drive.audit[rev] = f.id; await save(); }
+    for (const [r, id] of Object.entries(st.drive.audit)) if (+r < rev && !(st.drive.auditSuperseded || {})[r]) { const sup = await folder('supersededFolder', mopFolder, 'Superseded'); await d.api.move(id, sup, mopFolder); st.drive.auditSuperseded = { ...(st.drive.auditSuperseded || {}), [r]: true }; await save(); }
   }
   await syncRequestJson(q, st, d, mopFolder, save);
 

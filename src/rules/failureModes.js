@@ -38,7 +38,7 @@ export const RULES = [
     msg: (x, i) => `Isolation point ${i + 1}: confirm all loads with the GNE user (or tap Don't know)` },
   { id: 'zeroEnergyBy', screen: 3, flag: 'x.isoBy', fix: null, when: x => x.lo && x.c.additions && !x.r.x.isoBy.trim(),
     msg: () => "Who verifies zero energy at the point of work? (name, or tap Don't know)" },
-  { id: 'secondCheck', screen: 3, flag: 'x.isoBy2', fix: null, when: x => x.lo && x.t.t >= (+x.c.rules.twoPerson || 3) && !x.r.x.isoBy2.trim(),
+  { id: 'secondCheck', screen: 3, flag: 'x.isoBy2', fix: null, when: x => x.lo && !x.r.x.isoBy2.trim(), // decision #14 (JK 11/26/26): every LOTO, any tier
     msg: x => `Tier ${x.t.t}: name the second person who checks the isolation at the hold point` },
   { id: 'coldStorage', screen: 4, flag: 'x.cold', fix: null, when: x => x.tg.cold && !x.r.x.cold,
     msg: () => 'Answer: any cold rooms, freezers, fridges or incubators on this power or cooling?' },

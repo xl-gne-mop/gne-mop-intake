@@ -19,17 +19,19 @@ import { getIdentity } from '../auth/identity.js';
 import { isEditor } from '../auth/roles.js';
 import { idbCache, loadAllConfig } from '../config/loaders.js';
 import { cfgFromLists } from '../config/lists.js';
-import { tplFromTemplateJson } from '../config/templates.js';
+import { tplFromTemplateJson, isTemplateV2 } from '../config/templates.js';
 import { libraryEntries } from '../config/library.js';
 import { speechShim } from '../dictation/speech.js';
 import { loadSuggestions } from '../library/suggest.js';
 import { loadPilot, startPilotClock } from '../pilot/log.js';
 import { vHelp } from './help.js';
+import { vImport, drawWhere } from './importAny.js';
 import { showBanner, hideBanner } from './banner.js';
 import { createSession } from '../sync/status.js';
 import { renderSyncBar, wireSyncBar } from './syncbar.js';
 import { createDrain, listConflicts, createRemote } from '../sync/wire.js';
 import { askBackgroundSync, onBackgroundSync } from '../pwa/register.js';
+import { countOcrReloads } from '../import/anymop/pilot.js';
 
 const C = globalThis.MOP_CONFIG || {};
 
@@ -40,7 +42,8 @@ function render() {
   const note = (S.configMsg ? `<div class="note info">${esc(S.configMsg)}</div>` : '') + (S.note ? `<div class="note">${esc(S.note)}</div>` : '');
   document.body.classList.toggle('big', !!S.pilotOn);
   if (S.pilotOn) showBanner('pilot', 'PILOT – requests sync to the pilot tracker and sheet', null, 'warn'); else hideBanner('pilot');
-  $('#app').innerHTML = note + ({ board: vBoard, edit: vEdit, detail: vDetail, logs: vLogs, settings: vSettings, help: vHelp }[S.view] || vBoard)();
+  $('#app').innerHTML = note + ({ board: vBoard, edit: vEdit, detail: vDetail, logs: vLogs, settings: vSettings, help: vHelp, import: vImport }[S.view] || vBoard)();
+  if (S.view === 'import' && S.imp && S.imp.where) drawWhere();
   const bb = $('#backupbox'); if (bb) renderBackup(bb);
 }
 
@@ -49,10 +52,10 @@ export async function applyConfig({ getToken = () => null, fetch = globalThis.fe
   const r = await loadAllConfig({ ids: C.CONFIG_FILES || {}, getToken, fetch, cache: idbCache(openStore) });
   const folderUrl = C.DRIVE_ROOT_FOLDER_ID ? `https://drive.google.com/drive/folders/${C.DRIVE_ROOT_FOLDER_ID}` : '';
   if (r.lists) S.cfg = cfgFromLists(r.lists.data, { defaultRules: R.DEFAULT_SETTINGS, folderUrl });
-  if (r.template) S.tpl = tplFromTemplateJson(r.template.data);
+  if (r.template) { S.tpl = tplFromTemplateJson(r.template.data); S.tplOld = !isTemplateV2(r.template.data); }
   if (r.library) { S.libraryFile = r.library.data; S.library = libraryEntries(r.library.data); }
   const missing = !r.lists || !r.template || !r.library;
-  S.configMsg = missing ? 'Sign in to load the library and MOP template. You can still start requests and take photos.' : r.messages.join(' · ');
+  S.configMsg = missing ? 'Sign in to load the library and MOP template. You can still start requests and take photos.' : [...r.messages, ...(S.tplOld ? ['MOP template out of date – sync to update'] : [])].join(' · ');
   const logo = document.getElementById('logo'); if (logo && S.tpl.logo) { logo.src = 'data:image/png;base64,' + S.tpl.logo; logo.hidden = false; }
   return r;
 }
@@ -65,6 +68,7 @@ export async function loadRequests() {
 }
 
 export async function startApp() {
+  countOcrReloads(); // Import Any MOP pilot (U6): a reload while the scan reader was running
   S.hooks.render = render;
   S.hooks.reloadData = async () => { await loadRequests(); await loadLib(); };
   // Rebuild 4 re-rendered on every shared-store change (soft()); here every local save does the same.

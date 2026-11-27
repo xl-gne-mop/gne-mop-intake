@@ -1,7 +1,7 @@
 // GNE MOP Intake service worker (hand-written). The build fills CACHE and PRECACHE.
 // - App shell + vendor files: precached, served cache-first (the app works with no signal).
 // - Google, Smartsheet and Worker calls: other origins, never intercepted (network-only).
-const CACHE = 'mop-shell-c5646bf8e7cb9689';
+const CACHE = 'mop-shell-e1c9d1b068ed62ee';
 const PRECACHE = [
  "./",
  "./config.js",
@@ -29,6 +29,7 @@ const PRECACHE = [
  "./src/auth/signout.js",
  "./src/auth/smartsheet.js",
  "./src/auth/tokens.js",
+ "./src/config/companies.js",
  "./src/config/library.js",
  "./src/config/lists.js",
  "./src/config/loaders.js",
@@ -40,6 +41,25 @@ const PRECACHE = [
  "./src/dictation/parse.js",
  "./src/dictation/speech.js",
  "./src/export/outputs.js",
+ "./src/import/anymop/adapters/legacy.js",
+ "./src/import/anymop/adapters/mail.js",
+ "./src/import/anymop/adapters/office.js",
+ "./src/import/anymop/adapters/pdf.js",
+ "./src/import/anymop/apply.js",
+ "./src/import/anymop/cfb.js",
+ "./src/import/anymop/client.js",
+ "./src/import/anymop/docmodel.js",
+ "./src/import/anymop/extract.js",
+ "./src/import/anymop/fields.js",
+ "./src/import/anymop/guard.js",
+ "./src/import/anymop/mapper.js",
+ "./src/import/anymop/ocr.js",
+ "./src/import/anymop/pilot.js",
+ "./src/import/anymop/r4.js",
+ "./src/import/anymop/synonyms.js",
+ "./src/import/anymop/worker.js",
+ "./src/import/anymop/xml.js",
+ "./src/import/anymop/zip.js",
  "./src/import/docx.js",
  "./src/import/impacts.js",
  "./src/import/read.js",
@@ -50,6 +70,7 @@ const PRECACHE = [
  "./src/library/suggest.js",
  "./src/main.js",
  "./src/model/stages.js",
+ "./src/mop/fillMopV2.js",
  "./src/pilot/log.js",
  "./src/pwa/installGate.js",
  "./src/pwa/persist.js",
@@ -84,6 +105,7 @@ const PRECACHE = [
  "./src/ui/backupBox.js",
  "./src/ui/banner.js",
  "./src/ui/board.js",
+ "./src/ui/companies.js",
  "./src/ui/conflicts.js",
  "./src/ui/detail.js",
  "./src/ui/dom.js",
@@ -92,6 +114,7 @@ const PRECACHE = [
  "./src/ui/header.js",
  "./src/ui/help.js",
  "./src/ui/html.js",
+ "./src/ui/importAny.js",
  "./src/ui/logs.js",
  "./src/ui/screens.js",
  "./src/ui/settings.js",
@@ -99,6 +122,7 @@ const PRECACHE = [
  "./src/ui/syncbar.js",
  "./src/util/dates.js",
  "./src/util/download.js",
+ "./src/util/holidays.js",
  "./src/util/ids.js",
  "./src/util/net.js",
  "./src/vendor-ref/imp.js",
@@ -108,6 +132,8 @@ const PRECACHE = [
  "./vendor/pdfjs/pdf.min.js",
  "./vendor/pdfjs/pdf.worker.min.js"
 ];
+// The scan reader (vendor/ocr/) is downloaded on request into its own cache; app updates never delete it.
+const OCR_CACHE = 'mop-ocr-v1';
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE.map(p => new Request(p, { cache: 'reload' })))));
@@ -124,15 +150,25 @@ self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAIT
 // Background Sync (bonus, Chromium only): wake the open app so it drains its outbox with the user's own token.
 self.addEventListener('sync', e => { if (e.tag === 'mop-outbox') e.waitUntil(self.clients.matchAll({ type: 'window' }).then(cs => cs.forEach(c => c.postMessage({ type: 'SYNC_NOW' })))); });
 
+// Android share target ("Share → MOP Intake"): keep the shared files on the phone, then open "Start from an existing MOP".
+const SHARE_CACHE = 'mop-share';
+async function receiveShare(req) {
+  const form = await req.formData(), files = form.getAll('file').filter(f => f && f.size).slice(0, 10), c = await caches.open(SHARE_CACHE);
+  for (const k of await c.keys()) await c.delete(k);
+  let i = 0; for (const f of files) await c.put(`./shared/${i++}`, new Response(f, { headers: { 'content-type': f.type || 'application/octet-stream', 'x-name': encodeURIComponent(f.name || 'file') } }));
+  return Response.redirect('./#import-shared', 303);
+}
+
 self.addEventListener('fetch', e => {
   const req = e.request, url = new URL(req.url);
+  if (req.method === 'POST' && url.origin === self.location.origin && url.pathname.endsWith('/share-target')) { e.respondWith(receiveShare(req)); return; }
   if (req.method !== 'GET' || url.origin !== self.location.origin) return; // network-only for every API
   if (!url.pathname.startsWith(new URL(self.registration.scope).pathname)) return;
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
     // Pages: the exact cached page (app shell, help guide); unknown paths get the app shell.
     if (req.mode === 'navigate') return (await cache.match(req, { ignoreSearch: true })) || (await cache.match('./index.html')) || fetch(req);
-    const hit = await cache.match(req, { ignoreSearch: true });
+    const hit = (await cache.match(req, { ignoreSearch: true })) || (await caches.match(req, { ignoreSearch: true, cacheName: OCR_CACHE }));
     return hit || fetch(req);
   })());
 });

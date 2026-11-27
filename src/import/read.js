@@ -9,12 +9,17 @@ import { pdfjs } from '../attach/markup.js';
 import { msgList } from '../ui/html.js';
 import { uploadBlob } from '../core/save.js';
 
+/* Template v2 (11/26/26): a MOP printed from v2 shows the sub's short name in place of "Sub" ("REI MOP #:"). */
+function subShortFromLines(rec,lines){for(const l of lines){const m=/(?:^|\s)([A-Za-z][\w&.'-]*) MOP #:/.exec(l.text||'');if(m&&m[1]!=='Sub'&&m[1]!=='MOP'){rec.subShort=m[1];return}}}
+/* Excel intake v2 (decision #18): rows the Rebuild 4 reader doesn't know – sub short name, second isolation checker. */
+function intakeExtras(rec,book){const req=book&&book.Request;if(!req)return rec;const row=k=>{for(const ref of Object.keys(req)){const m=/^Z(\d+)$/.exec(ref);if(m&&String(req[ref])===k)return m[1]}return null};
+ const v=k=>{const r=row(k),x=r?req['C'+r]:null;return x==null?'':String(x).trim()};const ss=v('subShort'),i2=v('x.isoBy2');if(ss)rec.subShort=ss;if(i2){rec.x=rec.x||{};rec.x.isoBy2=i2}return rec}
 async function readImport(file){const name=file.name,ext=(name.split('.').pop()||'').toLowerCase(),u8=new Uint8Array(await file.arrayBuffer());
- if(ext==='xlsx'||ext==='xlsm'){const o=window.MOPIMP.parseIntakeXlsx(window.MOPIMP.readXlsx(u8));return{...o,kind:'Excel intake',file:name,name:o.rec.title||name}}
+ if(ext==='xlsx'||ext==='xlsm'){const bk=window.MOPIMP.readXlsx(u8),o=window.MOPIMP.parseIntakeXlsx(bk);intakeExtras(o.rec,bk);return{...o,kind:'Excel intake',file:name,name:o.rec.title||name}}
  if(ext==='docx'){const o=parseMopDocx(u8);return{rec:o.rec,kind:'Word MOP',file:name,name:`${o.mopNo?'MOP #'+o.mopNo+' – ':''}${o.rec.title||name}`,info:[`Read MOP${o.mopNo?' #'+o.mopNo:''}: ${o.rec.steps.filter(x=>x.desc).length} during-MOP steps, ${o.rec.impacts.filter(x=>x.impact).length} impacts.`],warn:['Not in the MOP form, so answer these in the app: discipline, in service, support questions, LOTO points and attachments.']}}
  if(ext==='pdf'){const L=await pdfjs(),doc=await L.getDocument({data:u8.slice(0)}).promise,lines=await window.MOPIMP.pdfLines(doc);
   if(lines.length<10)throw new Error('This PDF has no readable text (it may be a scan). Save the MOP from Word as PDF, or use the Excel intake.');
-  const o=window.MOPIMP.parseMopLines(lines);
+  const o=window.MOPIMP.parseMopLines(lines);subShortFromLines(o.rec,lines);
   /* the reference parser only splits on "Mitigation:"; also split arrows and "Mitigations:" paragraphs */
   const imps=splitImpacts(o.rec.impacts);if(imps.length)o.rec.impacts=imps;if(o.warn&&o.rec.impacts.every(i=>!i.impact||i.mitigation))o.warn=o.warn.filter(w=>!/mitigation written inside/.test(w));
   return{...o,kind:'PDF MOP',file:name,name:`${o.mopNo?'MOP #'+o.mopNo+' – ':''}${o.rec.title||name}`,pdf:file}}
@@ -34,4 +39,4 @@ async function applyImport(im){const q=S.draft,keep=clone(q.record.req),out=ensu
  q.history.push({at:new Date().toISOString(),by:S.uid||'',what:`Imported from ${im.kind}: ${im.file}`});
  S.impNew=null;S.dirty=true;await saveDraft();S.step=9;render();toast('Imported. The Review screen lists what is still needed; later screens fill from the library where blank.')}
 
-export { readImport, importPanel, applyImport };
+export { readImport, importPanel, applyImport, subShortFromLines, intakeExtras };

@@ -5,6 +5,7 @@
 // - fileUrl() returns object URLs for Blobs kept in IndexedDB (no shared asset store).
 // - window.TPL / window.MOPLIB are S.tpl / S.library, loaded from the Drive config files.
 import { CONTACT_ROLES, APPROVER_ROLES, DEFAULT_TRK } from '../config/lists.js';
+import { appHolidays } from '../util/holidays.js';
 
 export const R = globalThis.SRI;
 /* ---------- constants ---------- */
@@ -30,7 +31,7 @@ export const $ = s => document.querySelector(s);
 export const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const clone = o => JSON.parse(JSON.stringify(o));
 export const uidGen = () => 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const EMPTY_CFG = { printAdditions: true, rules: { ...R.DEFAULT_SETTINGS, fwHours: 4, twoPerson: 3 }, folder: '', additions: true, requireMarkup: true, projects: [], trk: { ...DEFAULT_TRK }, editors: [], notes: {} };
+const EMPTY_CFG = { printAdditions: true, rules: { ...R.DEFAULT_SETTINGS, holidays: appHolidays(), fwHours: 0, twoPerson: 1 }, folder: '', additions: true, requireMarkup: true, projects: [], trk: { ...DEFAULT_TRK }, editors: [], notes: {} };
 export const cfg = () => S.cfg || EMPTY_CFG;
 export const proj = id => cfg().projects.find(p => p.id === id) || null;
 export const safeUrl = u => /^https:\/\//i.test(u || '') ? u : '';

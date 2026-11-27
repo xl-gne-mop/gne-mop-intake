@@ -1,0 +1,48 @@
+// Import label synonyms (Tier A plan §2 U3 step 2; the plan's config/import-synonyms.json). Plain module so it works
+// on every pilot phone. Editors extend it through lists.json settings.ImportSynonyms (suggest → publish).
+export const SYNONYMS = {
+  "schema": "gne-mop-import-synonyms",
+  "version": 1,
+  "note": "Labels that mean each intake field in other companies' MOPs. Anyone can suggest a label (from 'Other text we found'); library editors publish additions in lists.json settings.ImportSynonyms (same suggest → publish flow as the library). Matching ignores case, numbering ('1.', 'A.', 'Section A –') and a trailing colon.",
+  "labels": {
+    "title": ["MOP Title", "Title", "Project Title", "Procedure Title", "MOP Name", "Name of MOP", "Job Title", "Subject", "Work Title", "Task", "Activity", "Description of Work Title"],
+    "scope": ["Work Scope", "Scope of Work", "Scope", "Description of Work", "Work Description", "Purpose", "Objective", "Summary of Work", "Summary", "Project Description", "Background", "Description"],
+    "origin": ["Origin", "Origin of Change", "Reason for Work", "Reason"],
+    "bldg": ["Building", "Bldg", "Building No", "Building Number", "Facility"],
+    "areas": ["Work Area(s)", "Work Area", "Work Areas", "Location", "Work Location", "Location of Work", "Room", "Rooms", "Room Number", "Area", "Areas", "Floor", "Area(s) Affected"],
+    "equip": ["Equipment", "Equipment Affected", "Equipment Name", "Panel", "System", "Asset", "Equipment / System", "Affected Equipment"],
+    "start": ["MOP Execute Date", "Execute Date", "Date of Work", "Work Date", "Scheduled Date", "Outage Date", "Shutdown Date", "Planned Start", "Start Date", "Start", "Date / Time", "Date and Time", "Proposed Date", "Requested Date", "Date"],
+    "startTime": ["Start Time", "Time", "Begin Time", "Time of Work", "Outage Start"],
+    "endTime": ["End Time", "Finish Time", "Completion Time", "Outage End", "Planned End", "End"],
+    "duration": ["Duration", "Outage Duration", "Shutdown Duration", "Estimated Duration", "Length of Outage", "Time Required", "Expected Duration", "Duration of Outage", "Duration of LOTO"],
+    "priority": ["Priority", "Risk Level", "Criticality"],
+    "subMop": ["MOP #", "MOP No", "MOP Number", "MOP ID", "Procedure No", "Procedure Number", "Document No", "Document Number", "Sub MOP #"],
+    "req.name": ["Prepared By", "Author", "MOP Author", "Requester", "Requested By", "Submitted By", "Contact", "Contact Name", "Foreman", "Supervisor", "Person in Charge", "PIC", "Originator"],
+    "req.company": ["Company", "Contractor", "Subcontractor", "Vendor", "Contractor Name", "Firm"],
+    "req.phone": ["Phone", "Phone Number", "Cell", "Mobile", "Contact Number", "Tel", "Telephone"],
+    "users": ["Impacted Users", "Affected Users", "Users Affected", "Occupants", "Affected Occupants", "Customers Affected", "Affected Departments"],
+    "safety": ["Safety Requirements", "Safety", "PPE", "Hazards", "Safety Precautions", "Special Precautions", "Hazard Analysis"],
+    "tools": ["Required Tools", "Tools", "Tools Required", "Equipment Required", "Required Equipment", "Materials", "Materials Required", "Tools and Equipment"],
+    "crew": ["Required Personnel", "Personnel", "Crew", "Manpower", "Staff", "Personnel Required", "Workers"],
+    "workers": ["Qualified and Authorized Workers", "Authorized Workers", "Qualified Workers", "Work Crew"],
+    "steps": ["Detailed Step-by-Step Schedule of Activities to be Performed during MOP", "Procedure", "Procedures", "Steps", "Work Steps", "Sequence of Operations", "Sequence of Work", "Sequence", "Method", "Execution", "Work Procedure", "Detailed Procedure", "Step-by-Step Procedure", "Implementation", "Shutdown Procedure", "Work Plan"],
+    "pre": ["Pre-Work", "Prior to Work", "Before the Work", "Preparation", "Pre-Outage", "Prerequisite Steps", "Activities Prior to MOP"],
+    "gonogo": ["Go / No-Go Conditions", "Go / No-Go", "Go/No-Go", "Go No Go", "Prerequisites", "Pre-Conditions", "Preconditions", "Hold Points", "Conditions to Proceed"],
+    "backout": ["Back-Out Procedures", "Back-Out Procedure", "Back-Out Plan", "Backout", "Back Out", "Rollback", "Roll Back", "Contingency", "Contingency Plan", "Abort Plan", "Recovery Plan", "Emergency Back-Out"],
+    "x.rts": ["Return to Service", "Return-to-Service", "Restoration", "Restore", "System Restoration", "Re-energize", "Re-energization", "Startup", "Start-Up", "Post-Work", "Post Work", "Close-Out", "Closeout", "Completion"],
+    "impacts": ["Impact Description", "Impacts", "Impact", "Planned Impact", "Potential Impact", "Affected Systems", "Systems Affected", "Effects", "Outage Impacts", "Impact Notification", "Impacts and Mitigations"],
+    "mitigation": ["Mitigation", "Mitigations", "Mitigation Plan", "Temporary Measures"],
+    "loto.points": ["Isolation Points", "Isolation Point", "LOTO Points", "LOTO", "Lockout Points", "Lock Out Points", "Lockout/Tagout", "Lock Out / Tag Out", "Lock-Out Tag-Out", "Isolations", "Energy Isolation", "Energy Sources", "Points of Isolation", "Isolation Plan", "Tag-Out Points"],
+    "x.isoBy": ["Isolation Verified By", "Zero Energy Verified By", "Verified By", "Verification By", "Tested By", "Absence of Voltage Verified By"],
+    "x.isoBy2": ["Second Check", "Second Person", "Second Verifier", "Witness", "Witnessed By", "Second Check / Time"],
+    "loto.safeOff": ["Safe-Off Performed By", "LOTO Performed By", "Locked Out By", "Lockout By", "Initial Safe-off/LOTO Performed by"],
+    "sup.watch": ["Fire Watch", "Fire Watch Required"],
+    "sup.hot": ["Hot Work", "Hot Work Required", "Hot Work Permit"],
+    "sup.impair": ["Impairment", "Impairment Required", "Fire Alarm Impairment", "FLS Impairment", "Fire System Impairment", "Sprinkler Impairment", "Life Safety Impairment"],
+    "sup.cgmp": ["GMP / QA", "GMP", "cGMP", "GxP", "QA Impact", "GMP Impact"],
+    "x.alarms": ["Alarms", "Alarm Suppression", "Alarms to Suppress", "Alarm Bypass", "Points to Bypass"],
+    "sup.jll": ["JLL Assist", "JLL Assist Required", "JLL Support"],
+    "sup.siemens": ["Siemens Support", "Siemens", "Need Siemens Support"]
+  }
+}
+;

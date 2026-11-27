@@ -1,4 +1,4 @@
-// Import a past MOP written in the GNE template (.docx).
+// Import a past MOP written in the GNE template (.docx): v1 (one table) or v2 (three tables, 11/26/26).
 // Ported from reference/rebuild-4/index.html (r4:295-329); function bodies kept as close to verbatim as possible.
 import { R, S, STEPS, STATUSES, SIDE, UTIL, GROUPS, SYSTEM_CODES, LOTO_CATS, CAT_MAP, CONTACT_ROLES, APPROVER_ROLES, ICON_MIC, $, esc, clone, uidGen, cfg, proj, safeUrl, pad3, mopLabel, toast, now, fS, fL, isoDay, pdDay, fromIso, fileUrl, D, later } from '../core/state.js';
 import { newRecord } from '../core/record.js';
@@ -7,8 +7,9 @@ import { splitImpacts } from './impacts.js';
 
 function parseMopDocx(u8){const parts=R.unzipSync(u8),xml=parts['word/document.xml'];if(!xml)throw new Error('Not a Word document');
  const doc=new DOMParser().parseFromString(R.strFromU8(xml),'application/xml'),W='http://schemas.openxmlformats.org/wordprocessingml/2006/main',W14='http://schemas.microsoft.com/office/word/2010/wordml';
- const tbl=doc.getElementsByTagNameNS(W,'tbl')[0];if(!tbl)throw new Error('No MOP table found');
- const rows=[...tbl.childNodes].filter(n=>n.localName==='tr'),cells=tr=>[...tr.childNodes].filter(n=>n.localName==='tc');
+ /* Template v2 (11/26/26): the body has 3 tables (form, page 2 on, continuation sheet); read every row in order. */
+ const body=doc.getElementsByTagNameNS(W,'body')[0],tbls=body?[...body.childNodes].filter(n=>n.localName==='tbl'):[];if(!tbls.length)throw new Error('No MOP table found');
+ const rows=tbls.flatMap(t=>[...t.childNodes].filter(n=>n.localName==='tr')),cells=tr=>[...tr.childNodes].filter(n=>n.localName==='tc');
  const txt=n=>[...n.getElementsByTagNameNS(W,'t')].map(t=>t.textContent).join('').replace(/[☐☒]/g,'').replace(/\s+/g,' ').trim();
  const paras=n=>[...n.getElementsByTagNameNS(W,'p')].map(txt);
  const checks=tr=>[...tr.getElementsByTagNameNS(W,'sdt')].filter(s=>s.getElementsByTagNameNS(W14,'checkbox').length).map(s=>({on:(s.getElementsByTagNameNS(W14,'checked')[0]||{getAttributeNS:()=>''}).getAttributeNS(W14,'val')==='1',lab:txt(s.parentNode)}));
@@ -22,7 +23,7 @@ function parseMopDocx(u8){const parts=R.unzipSync(u8),xml=parts['word/document.x
   if(ri===0){const ck=checks(tr);[['High','H'],['Medium','M'],['Low','L']].forEach(([l,v])=>{if(ck.some(c=>c.on&&c.lab===l))rec.priority=v});mopNo=((/#\s*(\S+)\s*rev\s*(\S+)/i.exec(all))||[]).slice(1).join(' rev ');return}
   if(hm){sec=+hm[1];grp=null;if(sec===2){}return}
   const lab=(c,l)=>c.startsWith(l)?c.slice(l.length).trim():null;
-  ct.forEach(c=>{let v;if((v=lab(c,'MOP Title:'))!==null)rec.title=v;if((v=lab(c,'Work Scope:'))!==null)rec.scope=v.replace(/\s*\(Origin:.*\)\s*$/,'');if((v=lab(c,'Work Area(s):'))!==null)rec.areas=v;if((v=lab(c,'Sub MOP #:'))!==null)rec.subMop=v});
+  ct.forEach(c=>{let v;if((v=lab(c,'MOP Title:'))!==null)rec.title=v;if((v=lab(c,'Work Scope:'))!==null)rec.scope=v.replace(/\s*\(Origin:.*\)\s*$/,'');if((v=lab(c,'Work Area(s):'))!==null)rec.areas=v;const sm=/^([A-Za-z][\w&.'-]*) MOP #:\s*(.*)$/.exec(c);if(sm){rec.subMop=sm[2].trim();if(sm[1]!=='Sub')rec.subShort=sm[1]}});
   if(sec===1){if(GN[ct[0]]){grp=GN[ct[0]];const g=grp==='util'?rec.x.util:rec.sys[grp];checks(tr).forEach(c=>{if(c.on){if(/^Low/.test(c.lab))g.level='L';if(/^Medium/.test(c.lab))g.level='M';if(/^High/.test(c.lab))g.level='H'}});return}
    if(/^GMP \/ QA:/.test(ct[0])){rec.x.gmpNotes='';return}
    if(grp){const g=grp==='util'?rec.x.util:rec.sys[grp];if(/^Notes:/.test(ct[0])){g.notes=ct[0].replace(/^Notes:\s*/,'');grp=null;return}
@@ -32,6 +33,7 @@ function parseMopDocx(u8){const parts=R.unzipSync(u8),xml=parts['word/document.x
   if(sec===5)ct.forEach(c=>{const t=strip(c);if(t&&/^\d+\./.test(c))tools.push(t)});
   if(sec===6)ct.forEach(c=>{const t=strip(c);if(t&&/^\d+\./.test(c))crew.push(t)});
   if(sec===7&&/^(9|10)$/.test(ct[0])&&ct[1])rec.pre.push({desc:ct[1],dur:ct[2]||''});
+  if(sec===7&&/^Isolation verified/.test(ct[0])){const by=ct[0].replace(/^.*?Print Name:\s*/,'').trim(),by2=/^Second check \/ Time:/.test(ct[1]||'')?ct[1].replace(/^Second check \/ Time:\s*/,'').trim():'';if(by&&by!=='N/A')rec.x.isoBy=by;if(by2)rec.x.isoBy2=by2}
   if(sec===8&&/^\d+$/.test(ct[0])&&ct[1])rec.steps.push({desc:ct[1],dur:ct[2]||''});
   if(sec===9&&/^\d+$/.test(ct[0])&&ct[1])gn.push(ct[1]);
   if(sec===10&&/^\d\)/.test(ct[0])){const t=strip(ct[0]);if(t)bo.push(t)}

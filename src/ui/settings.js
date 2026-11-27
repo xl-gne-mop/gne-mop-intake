@@ -5,10 +5,11 @@ import { SYNC } from '../sync/status.js';
 import { vLibrary } from '../library/editor.js';
 import { pilotIdsSet, PILOT_NEEDS_IDS } from '../pilot/log.js';
 import { allEntries } from '../lib/library.js';
+import { vCompanies } from './companies.js';
 
 /* ---------- settings ---------- */
 function vSettings(){const c=cfg(),ed=S.canEdit,rl=c.rules;
- const tabs=`<div class="tabs">${['General','Projects','Library','Backup'].map((t,i)=>`<button class="chip ${S.setTab===i?'on':''}" data-a="stab" data-i="${i}">${t}</button>`).join('')}</div>`;
+ const tabs=`<div class="tabs">${['General','Projects','Library','Backup','Companies'].map((t,i)=>`<button class="chip ${S.setTab===i?'on':''}" data-a="stab" data-i="${i}">${t}</button>`).join('')}</div>`;
  if(S.setTab===2)return vLibrary(tabs,ed);
  if(S.setTab===1){const pe=S.projEdit;
   if(pe)return `<h1>Settings</h1>${tabs}<div class="sheet"><h2>${esc(pe.label)}</h2><p class="sub">From lists.json in the Drive config folder. Contacts print in MOP section 3; approvers in section 13. JK changes them in Drive.</p>
@@ -19,6 +20,7 @@ function vSettings(){const c=cfg(),ed=S.canEdit,rl=c.rules;
   return `<h1>Settings</h1>${tabs}<p class="sub">Projects come from lists.json in the Drive config folder (read-only here).</p>
    <div class="scroll"><table class="stack"><thead><tr><th>Project</th><th>Building</th><th>Next MOP</th><th>Location</th><th>Named contacts</th><th></th></tr></thead><tbody>${c.projects.map((p,k)=>`<tr><td>${esc(p.label)}</td><td>${esc(p.bldg)}</td><td>${esc(p.next)}</td><td>${p.loc?esc(p.loc):'<span class="pill amb">Not set</span>'}</td><td>${p.contacts.filter(x=>x.name.trim()).length}/8</td><td><button class="btn sm" data-a="pedit" data-i="${k}">View</button></td></tr>`).join('')}</tbody></table></div>`}
  if(S.setTab===3)return `<h1>Settings</h1>${tabs}<div id="backupbox"></div>`;
+ if(S.setTab===4)return vCompanies(tabs);
  const note=k=>c.notes&&c.notes[k]?`<small>${esc(c.notes[k])}</small>`:'';
  return `<h1>Settings</h1>${tabs}<p class="sub">These come from lists.json in the Drive config folder. JK changes them there; this screen only shows them.${S.configMsg?` <b>${esc(S.configMsg)}</b>`:''}</p><div class="sheet">
   <dl class="kv"><dt>Signed in as</dt><dd>${esc(S.uid||'Not signed in yet')}${ed?' · editor':''}${S.uid?' <button class="btn sm" data-a="signout">Sign out</button>':''}</dd>
@@ -28,9 +30,9 @@ function vSettings(){const c=cfg(),ed=S.canEdit,rl=c.rules;
   <dt>JLL minimum notice</dt><dd>${esc(rl.jllMinWorkdays)} workdays ${note('JLLMinWorkdays')}</dd>
   <dt>JLL earliest request</dt><dd>${esc(rl.jllMaxWorkdays)} workdays ${note('JLLMaxWorkdays')}</dd>
   <dt>LOTO lines per JLL request</dt><dd>${esc(rl.jllMaxLines)} ${note('JLLMaxLines')}</dd>
-  <dt>Fire watch prompt</dt><dd>${esc(rl.fwHours)} hours ${note('FireWatchHours')}</dd>
-  <dt>Second-person isolation check</dt><dd>Tier ${esc(rl.twoPerson)} and up ${note('SecondCheckTier')}</dd>
-  <dt>Holidays</dt><dd>${rl.holidays.map(h=>esc(fS(pdDay(h)))).join(', ')} ${note('Holidays')}</dd>
+  <dt>Fire watch prompt</dt><dd>Every life-safety impairment, any length <small>JK decision 11/26/26</small></dd>
+  <dt>Second-person isolation check</dt><dd>Every LOTO <small>JK decision 11/26/26</small></dd>
+  <dt>Holidays</dt><dd>US federal holidays. Next: ${rl.holidays.filter(h=>h>=isoDay(now())).slice(0,6).map(h=>esc(fS(pdDay(h)))).join(', ')} <small>Used to count workdays for the JLL notice and lead times (JK decision 11/26/26)</small></dd>
   <dt>Pilot mode</dt><dd><label class="ck"><input type="checkbox" data-pilot ${S.pilotOn?'checked':''} ${pilotIdsSet()?'':'disabled'}><span>Bigger buttons, time in the app and pilot feedback on each request (Logs → Pilot). Sync goes to the pilot tracker and sheet.</span></label>${pilotIdsSet()?'':`<small>${esc(PILOT_NEEDS_IDS)}</small>`}</dd>
   ${c.review?`<dt>Emergency numbers (print on every MOP)</dt><dd>${[c.review.emergency,c.review.security,c.review.er&&'Nearest ER: '+c.review.er,c.review.fls&&'SSF FLS hotline '+c.review.fls].filter(Boolean).map(esc).join('<br>')||'<span class="pill amb">Not set</span>'} ${note('EmergencyContact')}</dd>
   <dt>Permit lead times (days)</dt><dd>${Object.entries(c.review.permitLead).map(([k,v])=>esc(k+' '+v)).join(', ')||'<span class="pill amb">Not set</span>'} ${note('PermitLeadDays')}</dd>

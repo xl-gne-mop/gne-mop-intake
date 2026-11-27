@@ -83,7 +83,7 @@ export function createSession({ config = C(), store = idbTokenStore, fetch: fetc
         if (r.stopped === 'signin') { SYNC.state = 'signin'; return SYNC; }
         SYNC.message = r.conflicts ? `${r.message}. ${r.conflicts} change${r.conflicts > 1 ? 's' : ''} need${r.conflicts > 1 ? '' : 's'} an editor to choose.` : r.message;
         if (r.smartsheet) SYNC.smartsheet = r.smartsheet;
-        if (r.stopped === 'access') SYNC.state = 'blocked';
+        if (r.stopped === 'access' || r.stopped === 'template') SYNC.state = 'blocked';
       }
       return SYNC;
     } finally { SYNC.busy = false; changed(); }
